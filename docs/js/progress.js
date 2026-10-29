@@ -43,18 +43,23 @@ function ratingSeries(tc, data = rows()) {
   return pts.filter((p, i) => !i || p.t !== pts[i - 1].t || p.r !== pts[i - 1].r);
 }
 function current(tc, series = ratingSeries(tc)) { return series.length ? series[series.length - 1].r : null; }
+// The climb starts from your lowest rating (latest such point), so a drop and a climb back
+// count from the bottom: milestones are reached only after that low.
 function ladder(tc, series = ratingSeries(tc)) {
   if (!series.length) return null;
-  const start = series[0].r, now = current(tc, series), goal = BC.local.get('bc.goal', 400);
-  const rungs = MILESTONES.filter(m => m > start - 1);
+  const now = current(tc, series), goal = BC.local.get('bc.goal', 400);
+  let lowAt = 0;
+  series.forEach((p, i) => { if (p.r <= series[lowAt].r) lowAt = i; });
+  const start = series[lowAt].r, climb = series.slice(lowAt);
+  const rungs = MILESTONES.filter(m => m > start);
   const reached = {};
-  for (const m of rungs) { const p = series.find(x => x.r >= m); if (p) reached[m] = p.t; }
-  const next = rungs.find(m => !reached[m] && m > now) || null;
+  for (const m of rungs) { const p = climb.find(x => x.r >= m); if (p) reached[m] = p.t; }
+  const next = rungs.find(m => m > now) || null;  // always the next rung above where you are now
   const prevM = [...rungs].reverse().find(m => m <= now) || start;
   const upto = Math.max(goal, ...Object.keys(reached).map(Number), next || 0);
   const shown = rungs.filter(m => m <= upto).concat(rungs.filter(m => m > upto).slice(0, 2));
   const peak = Math.max(...series.map(p => p.r));
-  return { start, now, goal, next, prev: prevM, reached, shown, peak };
+  return { start, startAt: series[lowAt].t, now, goal, next, prev: prevM, reached, shown, peak };
 }
 
 // ---------- achievements ----------
@@ -240,11 +245,15 @@ function ladderHTML() {
   }
   const toNext = L.next ? L.next - L.now : 0, span = L.next ? L.next - L.prev : 1;
   return `<section class="card"><div class="planhead"><h2>Milestones · ${TC[tc]}</h2>${tcSelect}</div>
-    <div class="ladderhead"><p class="heronum">${L.now}</p><p class="body">${L.next ? `<b>${toNext}</b> points to <b>${L.next}</b>. Peak so far: ${L.peak}.` : 'You passed every milestone here!'}</p></div>
+    <div class="ladderhead"><p class="heronum">${L.now}</p><p class="body">${L.next ? `<b>${toNext}</b> points to <b>${L.next}</b>.` : 'You passed every milestone here!'}
+      Climbing from ${L.start} (${fmtDate(L.startAt)}). All-time best: ${L.peak}.</p></div>
     ${L.next ? `<div class="meter goal" role="meter" aria-valuemin="${L.prev}" aria-valuemax="${L.next}" aria-valuenow="${L.now}" aria-label="Progress to the next milestone"><i style="width:${clamp((L.now - L.prev) / span, 0, 1) * 100}%"></i></div>` : ''}
     <ol class="ladder">${L.shown.map(m => {
-      const r = L.reached[m], isNext = m === L.next;
-      return `<li class="${r ? 'got' : isNext ? 'next' : ''}${m === L.goal ? ' goal' : ''}"><b>${m}</b><span>${r ? fmtDate(r) : isNext ? 'next' : m === L.goal ? 'goal' : ''}</span></li>`;
+      const r = L.reached[m], isNext = m === L.next, above = m > L.now;
+      // Reached before but above your rating now: shown as "before", still ahead of you.
+      const cls = r && !above ? 'got' : r ? 'before' : '';
+      const label = r && !above ? fmtDate(r) : isNext ? (r ? `next · was ${fmtDate(r)}` : 'next') : r ? `was ${fmtDate(r)}` : m === L.goal ? 'goal' : '';
+      return `<li class="${cls}${isNext ? ' next' : ''}${m === L.goal ? ' goal' : ''}"><b>${m}</b><span>${label}</span></li>`;
     }).join('')}</ol>
     <details class="tableview"><summary>Add a rating by hand</summary>${manual}</details></section>`;
 }
