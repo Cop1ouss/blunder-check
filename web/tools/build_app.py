@@ -69,6 +69,7 @@ SW = """// Caches the whole app so it works offline. The version changes wheneve
 // any file changes, which makes the app offer an update.
 const CACHE = 'bc-__VERSION__';
 const FONTS = 'fonts-v1';
+const DATA = 'data-v1';
 const ASSETS = __ASSETS__;
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))); });
 self.addEventListener('activate', e => {
@@ -81,6 +82,14 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (url.origin === location.origin && url.pathname.includes('/data/')) {
+    // Synced games change all the time: network first, the last copy when offline.
+    e.respondWith(fetch(req).then(res => {
+      if (res.ok) { const copy = res.clone(); caches.open(DATA).then(c => c.put(req, copy)); }
+      return res;
+    }).catch(() => caches.open(DATA).then(c => c.match(req, { ignoreSearch: true })).then(r => r || Response.error())));
+    return;
+  }
   if (url.origin === location.origin) {
     if (req.mode === 'navigate') { e.respondWith(caches.match('./index.html').then(r => r || fetch(req))); return; }
     e.respondWith(caches.match(req, { ignoreSearch: true }).then(r => r || fetch(req)));
@@ -134,7 +143,7 @@ def main():
 
     if os.path.isdir(OUT):
         for name in os.listdir(OUT):
-            if name != "icons":
+            if name not in ("icons", "data"):  # data/ belongs to the sync robot
                 p = os.path.join(OUT, name)
                 shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
     for f in FILES:

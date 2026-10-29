@@ -8,6 +8,7 @@ Read `PRD.md` first. It describes the app, its rules and the checks every change
 - `web/`: app source. `review.html` (markup and CSS), `js/shared.js`, `js/review.js`, `js/learn.js`, `js/legends.js`, `js/mygames.js` (chess.com import, auto-review, stats), `js/insights.js`, `app/app.js` (installed-app extras).
 - `web/data.js`, `web/content.js`, `web/legends.js`, `web/puzzles.js`: generated content. Rebuild with the scripts in `web/tools/`; never hand-edit.
 - `web/engine/`: Stockfish and chess.js builds. **Do not modify** (GPLv3 binaries).
+- `docs/data/<user>/`: written by the sync robot (`.github/workflows/sync-chesscom.yml` running `web/tools/sync_chesscom.py`). Don't edit by hand; `build_app.py` leaves it alone.
 - `review.py`, `drill.py`: optional command-line tools (Python, python-chess, local Stockfish).
 
 ## Rules

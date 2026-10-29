@@ -102,7 +102,7 @@ const slim = (gm, user) => {
 // Only standard chess from the monthly archives: these contain finished games only.
 const usable = gm => gm.rules === 'chess' && gm.pgn && !/\[SetUp "1"\]/.test(gm.pgn);
 
-async function loadGames({ user, older = false, quick = false } = {}) {
+async function loadGames({ user, older = false, quick = false, silent = false } = {}) {
   if (CC.busy) return;
   const d = ccStore();
   user = (user || d.user || '').trim().toLowerCase();
@@ -140,10 +140,70 @@ async function loadGames({ user, older = false, quick = false } = {}) {
     ccSave(d);
     BC.emit('ccgames');
   } catch (e) {
-    CC.error = e.code === 404 ? `No chess.com player called "${user}". Check the spelling.` : e.message;
+    if (!silent) CC.error = e.code === 404 ? `No chess.com player called "${user}". Check the spelling.` : e.message;
   } finally {
     CC.busy = false; renderCC();
   }
+}
+
+// =====================================================================
+// Games and reviews from the background sync robot (GitHub Actions)
+// =====================================================================
+const gameFile = url => url.replace(/\/+$/, '').split('/').slice(-2).join('-');
+async function loadServer(user) {
+  let res;
+  try { res = await fetch(`data/${encodeURIComponent(user)}/games.json`, { cache: 'no-cache' }); } catch (e) { return null; }
+  if (!res.ok) return null;
+  let data;
+  try { data = await res.json(); } catch (e) { return null; }
+  if (!data || !Array.isArray(data.games)) return null;
+  const d = ccStore();
+  if (d.user !== user) Object.assign(d, { user, games: [], archives: [], next: -1 });
+  const byUrl = new Map(d.games.map(x => [x.url, x]));
+  let added = 0;
+  for (const s of data.games) {
+    const x = { url: s.url, pgn: s.pgn, end: s.end, tc: s.tc, rated: s.rated, me: s.me, white: s.white, black: s.black, ready: s.an === true };
+    if (!byUrl.has(x.url)) added++;
+    byUrl.set(x.url, x);
+  }
+  d.games = [...byUrl.values()].sort((a, b) => b.end - a.end).slice(0, MAX_GAMES);
+  d.server = { updatedAt: data.updatedAt, games: data.games.length };
+  d.fetchedAt = Math.max(d.fetchedAt || 0, data.updatedAt || 0);
+  ccSave(d);
+  if (data.stats && (!BC.local.get('bc.ccstats', null) || data.stats.at > BC.local.get('bc.ccstats', {}).at)) BC.local.set('bc.ccstats', data.stats);
+  if (Array.isArray(data.ratingLog) && data.ratingLog.length) {
+    const log = BC.local.get('bc.ratingLog', []), seen = new Set(log.map(e => `${e.t}|${e.tc}`));
+    for (const e of data.ratingLog) if (!seen.has(`${e.t}|${e.tc}`)) log.push(e);
+    log.sort((a, b) => a.t - b.t);
+    BC.local.set('bc.ratingLog', log.slice(-2000));
+  }
+  BC.emit('ccgames'); BC.emit('ccstats');
+  return { added };
+}
+async function fetchAnalysis(user, x) {
+  try {
+    const res = await fetch(`data/${encodeURIComponent(user)}/an/${gameFile(x.url)}.json`);
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j && Array.isArray(j.an) ? j.an : null;
+  } catch (e) { return null; }
+}
+// Turn the robot's reviews into summaries and Daily-training positions. No engine needed.
+async function importServerReviews(limit = 60) {
+  const d = ccStore();
+  const todo = d.games.filter(x => x.ready && !stats.has(x.url)).slice(0, limit);
+  let n = 0;
+  for (const x of todo) {
+    const an = await fetchAnalysis(d.user, x);
+    const game = an && BC.review.parseGame(x.pgn);
+    if (!game || an.length !== game.fens.length) continue;
+    game.an = an; game.me = x.me;
+    BC.review.derive(game);
+    const { summary, mistakes } = BC.review.summarize(game, { url: x.url, date: x.end, tc: x.tc });
+    stats.add(summary, mistakes);
+    n++;
+  }
+  return n;
 }
 
 // =====================================================================
@@ -152,7 +212,7 @@ async function loadGames({ user, older = false, quick = false } = {}) {
 async function autoReview(n = 10, { quiet = false } = {}) {
   if (CC.auto) return;
   const d = ccStore();
-  const todo = d.games.filter(x => !stats.has(x.url)).slice(0, n);
+  const todo = d.games.filter(x => !stats.has(x.url) && !x.ready).slice(0, n);
   if (!todo.length) { if (!quiet) { CC.error = ''; CC.autoDone = 'All your loaded games are already reviewed.'; renderCC(); } return; }
   CC.auto = { i: 0, n: todo.length, stop: false, pos: 0, of: 1 }; CC.autoDone = ''; renderCC();
   const cfg = BC.review.DEPTH.fast;
@@ -209,9 +269,12 @@ function renderCC() {
       <p class="opening">Uses chess.com's free public data. Only finished games are loaded.</p>`;
     $('ccForm').addEventListener('submit', async e => {
       e.preventDefault();
-      await loadGames({ user: $('ccUser').value });
+      const user = $('ccUser').value.trim().toLowerCase();
+      if (!user) return;
+      const srv = await loadServer(user);
+      await loadGames({ user, silent: !!srv });
       const now = ccStore();
-      if (now.user && !CC.error) { syncStats(now.user); if (syncOn()) autoReview(5, { quiet: true }); }
+      if (now.user && (!CC.error || srv)) { CC.error = ''; autoSync({ force: true }); }
     });
     return;
   }
@@ -226,8 +289,9 @@ function renderCC() {
   const auto = CC.auto ? `<div class="progress" id="ccAuto"><div class="bar"><i></i></div><p></p></div>` : '';
   el.innerHTML = `<h2>Your chess.com games</h2>
     <p class="opening"><b>${esc(d.user)}</b> · ${d.games.length} finished games loaded${d.fetchedAt ? ` · updated ${ago(d.fetchedAt)}` : ''}</p>
-    <p class="opening syncline">${syncOn() ? `<b>Auto-sync on.</b> New games load and get reviewed when you open the app.${CC.syncNote ? ` ${esc(CC.syncNote)}` : ''}` : 'Auto-sync is off.'}
+    <p class="opening syncline">${syncOn() ? `<b>Auto-sync on.</b> ${d.server ? 'Your GitHub robot checks chess.com every 15 minutes and reviews new games, even when the app is closed.' : 'New games load and get reviewed when you open the app.'}${CC.syncNote ? ` ${esc(CC.syncNote)}` : ''}` : 'Auto-sync is off.'}
       <button class="linkbtn" data-act="toggleSync">${syncOn() ? 'Turn off' : 'Turn on'}</button></p>
+    ${d.server && d.server.updatedAt ? `<p class="opening">Robot last checked chess.com ${ago(d.server.updatedAt)}.</p>` : ''}
     ${d.games.length ? `<ul class="lines ccgames">${rows}</ul>` : `<p class="body">No finished games found yet.</p>`}
     <div class="acts">
       ${d.games.length > 6 ? `<button class="btn ghost" data-act="more">${CC.showAll ? 'Show fewer' : `Show more (${Math.min(60, d.games.length)})`}</button>` : ''}
@@ -243,9 +307,10 @@ function renderCC() {
     </div>${err}
     <p class="opening">Only finished games are loaded. Fair play: never review a game that is still going.</p>`;
   renderAutoProgress();
-  el.querySelectorAll('[data-url]').forEach(b => b.addEventListener('click', () => {
+  el.querySelectorAll('[data-url]').forEach(b => b.addEventListener('click', async () => {
     const x = d.games.find(g => g.url === b.dataset.url); if (!x) return;
-    BC.review.openOrReview(x.pgn, x.me);
+    const an = x.ready ? await fetchAnalysis(d.user, x) : null;
+    if (an) BC.review.openWithAnalysis(x.pgn, x.me, an); else BC.review.openOrReview(x.pgn, x.me);
   }));
   const acts = {
     more: () => { CC.showAll = !CC.showAll; renderCC(); },
@@ -286,18 +351,30 @@ async function syncStats(user) {
     BC.emit('ccstats');
   } catch (e) { /* ratings also come from the games themselves */ }
 }
+let syncing = false;
 async function autoSync({ force = false } = {}) {
   const d = ccStore();
-  if (!d.user || !syncOn() || CC.busy || CC.auto || inClaudePage() || !navigator.onLine) return;
-  if (!force && Date.now() - (d.fetchedAt || 0) < SYNC_EVERY) return;
-  CC.lastAdded = 0;
-  await loadGames({ quick: true });
-  if (CC.error) return;
-  await syncStats(d.user);
-  const n = CC.lastAdded || 0;
-  CC.syncNote = n ? `Found ${n} new game${n > 1 ? 's' : ''}.` : '';
-  renderCC();
-  if (BC.local.get('bc.autoReviewNew', true) !== false) autoReview(5, { quiet: true });
+  if (syncing || !d.user || !syncOn() || CC.busy || CC.auto || !navigator.onLine) return;
+  if (!force && Date.now() - (d.syncedAt || 0) < SYNC_EVERY) return;
+  syncing = true;
+  try {
+    d.syncedAt = Date.now(); ccSave(d);
+    // 1. What the robot already fetched and reviewed (same site, works offline-first).
+    const srv = await loadServer(d.user);
+    let n = srv ? srv.added : 0;
+    // 2. Top up straight from chess.com, for games newer than the robot's last run.
+    if (!inClaudePage()) {
+      CC.lastAdded = 0;
+      await loadGames({ quick: true, silent: !!srv });
+      n += CC.lastAdded || 0;
+      if (!CC.error) await syncStats(d.user);
+    }
+    // 3. Use the robot's reviews; review the rest on this device.
+    const imported = await importServerReviews();
+    CC.syncNote = n ? `Found ${n} new game${n > 1 ? 's' : ''}.` : imported ? `Added ${imported} review${imported > 1 ? 's' : ''}.` : '';
+    renderCC();
+    if (BC.local.get('bc.autoReviewNew', true) !== false) autoReview(5, { quiet: true });
+  } finally { syncing = false; }
 }
 BC.cc.sync = autoSync;
 BC.cc.syncStats = syncStats;

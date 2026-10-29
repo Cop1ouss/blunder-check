@@ -710,6 +710,15 @@ function renderLegendMatch() {
 BC.review = {
   parseGame, derive, analyseGame, summarize, family, DEPTH, TAG_LABEL, TAG_LESSON,
   reviewPgn(pgn, me) { $('pgn').value = pgn; window.scrollTo({ top: 0, behavior: 'smooth' }); return review({ me }); },
+  // Open a game with a review made elsewhere (the background sync robot).
+  openWithAnalysis(pgn, me, an) {
+    const parsed = parseGame(pgn);
+    if (!parsed || !an || an.length !== parsed.fens.length) return this.openOrReview(pgn, me);
+    runId++; $('progress').hidden = true; $('reviewBtn').disabled = false; showErr('');
+    parsed.an = an; parsed.me = me; g = parsed; isSample = false; practice = null; ply = 0; flipped = me === 'b';
+    derive(g); render(); $('pgn').value = parsed.pgn; window.scrollTo({ top: 0, behavior: 'smooth' });
+    saveCurrent();
+  },
   // Open a game that was already reviewed (instant), or review it now.
   async openOrReview(pgn, me) {
     const parsed = parseGame(pgn);

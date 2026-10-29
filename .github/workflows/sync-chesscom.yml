@@ -1,0 +1,56 @@
+# Registers new chess.com games and reviews them, even when the app is closed.
+# Every 15 minutes: fetch finished games and ratings, review new games with
+# Stockfish, and commit them to docs/data/ for the app to read.
+# Change the player under Settings -> Secrets and variables -> Actions ->
+# Variables -> CHESSCOM_USER, or run it now from the Actions tab.
+name: Sync chess.com games
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-chesscom
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CHESSCOM_USER: ${{ vars.CHESSCOM_USER || 'Cop1ouss' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch new games and ratings
+        id: fetch
+        run: python web/tools/sync_chesscom.py fetch --user "$CHESSCOM_USER" --out docs/data
+
+      - name: Install Stockfish
+        if: steps.fetch.outputs.need_analysis == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq stockfish
+          pip install -q chess==1.11.2
+
+      - name: Review new games
+        if: steps.fetch.outputs.need_analysis == 'true'
+        run: python web/tools/sync_chesscom.py analyse --user "$CHESSCOM_USER" --out docs/data --max 20
+
+      - name: Save
+        run: |
+          git config user.name "blunder-check-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then echo "Nothing new."; exit 0; fi
+          git commit -q -m "Sync chess.com games for $CHESSCOM_USER"
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main

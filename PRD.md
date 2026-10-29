@@ -19,7 +19,7 @@ Success looks like this:
 ## 3. Principles (non-negotiable)
 
 1. **Fair play.** The app is for finished games and practice only. Never add anything that helps during a live game on another site: no overlays, no screen reading, no move suggestions for positions pasted mid-game. Every review screen keeps the fair-play note.
-2. **Free.** No paid services, no API keys, no backend. Static files only.
+2. **Free.** No paid services, no API keys, no backend. Static files, plus one free scheduled GitHub Actions job (the sync robot, 5.6).
 3. **Private.** Games and progress stay on the device (`localStorage`). Nothing is uploaded.
 4. **Offline.** After the first visit everything works without internet, including Stockfish.
 5. **Beginner-first.** Plain language, short sentences, no jargon without explanation. Giving away material is always flagged, even in a position that is already won or lost.
@@ -83,7 +83,8 @@ Nine players: Morphy, Anderssen, Capablanca, Tal, Fischer, Karpov, Kasparov, Pol
 
 ### 5.6 Progress (automatic tracking and personal content)
 
-- **Auto-sync**: with a chess.com username saved, the app checks chess.com when it opens or comes back to the screen (at most every 10 minutes): new finished games are added and the newest (up to 5) are reviewed in the background. Current ratings come from the public `/stats` endpoint and are logged over time. Can be turned off.
+- **Sync robot** (`.github/workflows/sync-chesscom.yml`, `web/tools/sync_chesscom.py`): every 15 minutes GitHub Actions fetches the player's finished games and ratings from chess.com, reviews new games with Stockfish (depth 14, same format as the app), and commits them to `docs/data/<user>/` (`games.json` and `an/<id>.json`). New games are registered even when the app is closed. The player defaults to Cop1ouss and can be changed with the repository variable `CHESSCOM_USER`. Scheduled workflows can be delayed by GitHub, and GitHub may pause them after 60 days without repository activity (re-enable in the Actions tab).
+- **Auto-sync**: with a chess.com username saved, the app checks when it opens or comes back to the screen (at most every 10 minutes): first the robot's files (games and ready-made reviews, no engine needed), then chess.com directly for anything newer; games without a review are reviewed on the device (up to 5). Current ratings come from the public `/stats` endpoint and are logged over time. Can be turned off.
 - **Progress** tab (formerly Insights), top to bottom: Today's plan, Milestones, Achievements, This week, then the statistics from 5.5.
 - **Today's plan**: five tasks built from your data (play a rapid game, review it, Daily training, 10 focus puzzles, one opening line) that tick themselves off as you do them, plus your focus: the most common mistake in your last 10 reviewed games, with a tip.
 - **Focus puzzles** (Lessons): 10 puzzles of the theme that matches your focus.
