@@ -293,7 +293,7 @@ function renderCC() {
   const auto = CC.auto ? `<div class="progress" id="ccAuto"><div class="bar"><i></i></div><p></p></div>` : '';
   el.innerHTML = `<h2>Your chess.com games</h2>
     <p class="opening"><b>${esc(d.user)}</b> · ${d.games.length} finished games loaded${d.fetchedAt ? ` · updated ${ago(d.fetchedAt)}` : ''}</p>
-    <p class="opening syncline">${syncOn() ? `<b>Auto-sync on.</b> ${d.server ? 'Your GitHub robot checks chess.com every 15 minutes and reviews new games, even when the app is closed.' : 'New games load and get reviewed when you open the app.'}${CC.syncNote ? ` ${esc(CC.syncNote)}` : ''}` : 'Auto-sync is off.'}
+    <p class="opening syncline">${syncOn() ? `<b>Auto-sync on.</b> ${d.server ? 'Your GitHub robot checks chess.com every 15 minutes and reviews new games, even when the app is closed.' : 'New games load and get reviewed when you open the app.'}${CC.syncNote ? ` ${esc(CC.syncNote)}` : ''}` : `Auto-sync is off.${CC.syncNote ? ` ${esc(CC.syncNote)}` : ''}`}
       <button class="linkbtn" data-act="toggleSync">${syncOn() ? 'Turn off' : 'Turn on'}</button></p>
     ${d.robot && d.robot.ok === false ? `<p class="err">Your GitHub robot couldn't sync (${ago(d.robot.at)}): ${esc(d.robot.error || 'unknown error')}</p>`
       : d.server && d.server.updatedAt ? `<p class="opening">Robot last found new games or ratings ${ago(d.server.updatedAt)}.</p>` : ''}
@@ -320,7 +320,7 @@ function renderCC() {
   const acts = {
     more: () => { CC.showAll = !CC.showAll; renderCC(); },
     older: () => loadGames({ older: true }),
-    refresh: () => loadGames(),
+    refresh: () => autoSync({ force: true }),
     change: () => { const s = ccStore(); s.user = ''; ccSave(s); CC.error = ''; renderCC(); },
     toggleSync: () => { BC.local.set('bc.autoSync', !syncOn()); CC.syncNote = ''; renderCC(); if (syncOn()) autoSync({ force: true }); },
     auto: () => autoReview(10),
@@ -359,7 +359,7 @@ async function syncStats(user) {
 let syncing = false;
 async function autoSync({ force = false } = {}) {
   const d = ccStore();
-  if (syncing || !d.user || !syncOn() || CC.busy || CC.auto || !navigator.onLine) return;
+  if (syncing || !d.user || (!force && !syncOn()) || CC.busy || CC.auto || !navigator.onLine) return;
   if (!force && Date.now() - (d.syncedAt || 0) < SYNC_EVERY) return;
   syncing = true;
   try {
@@ -376,7 +376,7 @@ async function autoSync({ force = false } = {}) {
     }
     // 3. Use the robot's reviews; review the rest on this device.
     const imported = await importServerReviews();
-    CC.syncNote = n ? `Found ${n} new game${n > 1 ? 's' : ''}.` : imported ? `Added ${imported} review${imported > 1 ? 's' : ''}.` : '';
+    CC.syncNote = n ? `Found ${n} new game${n > 1 ? 's' : ''}.` : imported ? `Added ${imported} review${imported > 1 ? 's' : ''}.` : force ? 'Everything is up to date.' : '';
     renderCC();
     if (BC.local.get('bc.autoReviewNew', true) !== false) autoReview(5, { quiet: true });
   } finally { syncing = false; }
