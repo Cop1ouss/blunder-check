@@ -1,6 +1,6 @@
 // Caches the whole app so it works offline. The version changes whenever
 // any file changes, which makes the app offer an update.
-const CACHE = 'bc-34e301369920';
+const CACHE = 'bc-635356ce5915';
 const FONTS = 'fonts-v1';
 const DATA = 'data-v1';
 const ASSETS = ["./", "index.html", "manifest.webmanifest", "js/app.js", "data.js", "content.js", "legends.js", "puzzles.js", "js/shared.js", "js/review.js", "js/learn.js", "js/legends.js", "js/mygames.js", "js/progress.js", "js/insights.js", "engine/chess-0.10.3.js", "engine/stockfish-17.1-lite-single-03e3232.js", "engine/stockfish-17.1-lite-single-03e3232.wasm", "engine/stockfish-10-asm.js", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];

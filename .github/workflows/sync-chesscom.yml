@@ -9,6 +9,11 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/sync-chesscom.yml
+      - web/tools/sync_chesscom.py
 
 permissions:
   contents: write

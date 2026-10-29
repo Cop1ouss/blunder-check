@@ -152,6 +152,10 @@ async function loadGames({ user, older = false, quick = false, silent = false } 
 const gameFile = url => url.replace(/\/+$/, '').split('/').slice(-2).join('-');
 async function loadServer(user) {
   let res;
+  try {
+    const st = await fetch(`data/${encodeURIComponent(user)}/status.json`, { cache: 'no-cache' });
+    if (st.ok) { const s = ccStore(); s.robot = await st.json(); ccSave(s); }
+  } catch (e) { /* no robot yet */ }
   try { res = await fetch(`data/${encodeURIComponent(user)}/games.json`, { cache: 'no-cache' }); } catch (e) { return null; }
   if (!res.ok) return null;
   let data;
@@ -291,7 +295,8 @@ function renderCC() {
     <p class="opening"><b>${esc(d.user)}</b> · ${d.games.length} finished games loaded${d.fetchedAt ? ` · updated ${ago(d.fetchedAt)}` : ''}</p>
     <p class="opening syncline">${syncOn() ? `<b>Auto-sync on.</b> ${d.server ? 'Your GitHub robot checks chess.com every 15 minutes and reviews new games, even when the app is closed.' : 'New games load and get reviewed when you open the app.'}${CC.syncNote ? ` ${esc(CC.syncNote)}` : ''}` : 'Auto-sync is off.'}
       <button class="linkbtn" data-act="toggleSync">${syncOn() ? 'Turn off' : 'Turn on'}</button></p>
-    ${d.server && d.server.updatedAt ? `<p class="opening">Robot last checked chess.com ${ago(d.server.updatedAt)}.</p>` : ''}
+    ${d.robot && d.robot.ok === false ? `<p class="err">Your GitHub robot couldn't sync (${ago(d.robot.at)}): ${esc(d.robot.error || 'unknown error')}</p>`
+      : d.server && d.server.updatedAt ? `<p class="opening">Robot last found new games or ratings ${ago(d.server.updatedAt)}.</p>` : ''}
     ${d.games.length ? `<ul class="lines ccgames">${rows}</ul>` : `<p class="body">No finished games found yet.</p>`}
     <div class="acts">
       ${d.games.length > 6 ? `<button class="btn ghost" data-act="more">${CC.showAll ? 'Show fewer' : `Show more (${Math.min(60, d.games.length)})`}</button>` : ''}

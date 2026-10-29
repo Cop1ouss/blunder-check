@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 import urllib.error
@@ -32,6 +33,10 @@ API = "https://api.chess.com/pub/player/"
 UA = "BlunderCheck/1.0 (personal chess training app; https://github.com/Cop1ouss/blunder-check)"
 MAX_GAMES = 400
 DRAW_CODES = {"agreed", "repetition", "stalemate", "insufficient", "50move", "timevsinsufficient"}
+
+
+class SyncError(Exception):
+    pass
 
 
 class Source:
@@ -45,6 +50,7 @@ class Source:
             if url.endswith("/stats"):
                 return self.fixture.get("stats", {})
             return {"games": self.fixture["months"].get(url, [])}
+        problem = ""
         for attempt in range(3):
             req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
             try:
@@ -52,16 +58,27 @@ class Source:
                     return json.load(r)
             except urllib.error.HTTPError as e:
                 if e.code == 404:
-                    sys.exit(f"chess.com has no player at {url}. Check the username.")
+                    raise SyncError(f"chess.com has no player called '{url.split('/player/')[1].split('/')[0]}'. Check the username.")
+                body = e.read()[:200].decode("utf-8", "replace").strip()
+                problem = f"HTTP {e.code} {body}"
                 if e.code == 429 and attempt < 2:
                     time.sleep(10 * (attempt + 1))
                     continue
-                raise
-            except urllib.error.URLError:
+                break
+            except (urllib.error.URLError, TimeoutError, ValueError) as e:
+                problem = str(e)
                 if attempt < 2:
                     time.sleep(5)
                     continue
-                raise
+        # Some servers refuse Python's HTTP client but accept curl.
+        r = subprocess.run(["curl", "-sS", "-L", "--max-time", "60", "-A", UA, "-H", "Accept: application/json",
+                            "-w", "\n%{http_code}", url], capture_output=True, text=True)
+        body, _, code = r.stdout.rpartition("\n")
+        if code == "200":
+            return json.loads(body)
+        if code == "404":
+            raise SyncError(f"chess.com has no player called '{url.split('/player/')[1].split('/')[0]}'. Check the username.")
+        raise SyncError(f"chess.com refused the request ({problem}; curl: HTTP {code} {body[:150]} {r.stderr[:150]}).".strip())
 
 
 def game_id(url):
@@ -106,11 +123,31 @@ def set_output(name, value):
             fh.write(f"{name}={value}\n")
 
 
+def write_status(folder, status):
+    """status.json tells the app (and you) whether the last sync worked. Rewritten only when it changes."""
+    path = os.path.join(folder, "status.json")
+    old = json.load(open(path)) if os.path.exists(path) else {}
+    if {k: v for k, v in old.items() if k != "at"} != status:
+        save(path, {**status, "at": int(time.time() * 1000)})
+
+
 def fetch(args):
     user = args.user.lower()
     folder, games_path, _ = paths(args.out, user)
     os.makedirs(folder, exist_ok=True)
+    try:
+        fetch_games(args, user, folder, games_path)
+        write_status(folder, {"ok": True, "error": None})
+    except Exception as e:  # keep going: the error is saved for the app and the next run tries again
+        msg = str(e) if isinstance(e, SyncError) else f"{type(e).__name__}: {e}"
+        print("SYNC FAILED:", msg)
+        write_status(folder, {"ok": False, "error": msg[:500]})
+        set_output("need_analysis", "false")
+
+
+def fetch_games(args, user, folder, games_path):
     data = load(games_path, user)
+    before = json.dumps({k: data.get(k) for k in ("games", "stats")}, sort_keys=True, default=str)
     src = Source(args.fixture)
     archives = src.get(f"{API}{user}/games/archives").get("archives", [])
     months = archives[-2:] if data["games"] else archives[-args.months:]
@@ -144,8 +181,14 @@ def fetch(args):
             if not last or last["r"] != stats[tc]["rating"] or now - last["t"] > 86400000:
                 data["ratingLog"].append({"t": now, "tc": tc, "r": stats[tc]["rating"], "src": "chess.com"})
         data["ratingLog"] = data["ratingLog"][-2000:]
-    data["updatedAt"] = now
-    save(games_path, data)
+    stats_cmp = lambda st: {k: v for k, v in (st or {}).items() if k != "at"}
+    old = json.loads(before)
+    changed = (json.dumps(data["games"], sort_keys=True) != json.dumps(old["games"], sort_keys=True)
+               or stats_cmp(data["stats"]) != stats_cmp(old["stats"]) or not os.path.exists(games_path)
+               or len(data["ratingLog"]) != len(load(games_path, user)["ratingLog"]))
+    if changed:  # only commit when something really changed
+        data["updatedAt"] = now
+        save(games_path, data)
     pending = sum(1 for g in data["games"] if not g.get("an"))
     print(f"{user}: {added} new game(s), {len(data['games'])} stored, {pending} waiting for a review")
     set_output("need_analysis", "true" if pending else "false")
