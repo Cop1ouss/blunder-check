@@ -242,7 +242,7 @@ const Sync = BC.sync = {
   },
   progRef() { return this.db.doc(`data/users/${this.uid}/progress`); },
   reviewsCol() { return this.db.doc(`data/users/${this.uid}/profile`).collection('reviews'); },
-  saveProgress() { BC.local.set('bc.progress', this.progress); if (this.db) this.queueSave(800); },
+  saveProgress() { BC.local.set('bc.progress', this.progress); if (this.db) this.queueSave(800); BC.emit('progress'); },
   queueSave(delay) {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {

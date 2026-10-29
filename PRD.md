@@ -81,7 +81,18 @@ Nine players: Morphy, Anderssen, Capablanca, Tal, Fischer, Karpov, Kasparov, Pol
 - **Rated puzzles**: 364 engine-checked puzzles with estimated ratings (about 580 to 1530); an Elo-style puzzle rating.
 - **Puzzle Rush**: 3 minutes, 3 strikes, puzzles get harder as you solve; best score saved.
 
-### 5.6 App shell
+### 5.6 Progress (automatic tracking and personal content)
+
+- **Auto-sync**: with a chess.com username saved, the app checks chess.com when it opens or comes back to the screen (at most every 10 minutes): new finished games are added and the newest (up to 5) are reviewed in the background. Current ratings come from the public `/stats` endpoint and are logged over time. Can be turned off.
+- **Progress** tab (formerly Insights), top to bottom: Today's plan, Milestones, Achievements, This week, then the statistics from 5.5.
+- **Today's plan**: five tasks built from your data (play a rapid game, review it, Daily training, 10 focus puzzles, one opening line) that tick themselves off as you do them, plus your focus: the most common mistake in your last 10 reviewed games, with a tip.
+- **Focus puzzles** (Lessons): 10 puzzles of the theme that matches your focus.
+- **Milestones**: a ladder for your main time control (default Rapid) in steps of 25 up to 400, then larger steps, with the date each was reached; ratings can also be typed in by hand.
+- **Achievements**: 33 badges (rating milestones, game quality, streaks, puzzles, openings, lessons, legends) with the date earned and a pop-up when a new one is earned.
+- **This week**: games, results, rating change, accuracy, blunders and hung pieces per game, compared with last week.
+- Backups include every `bc.*` key, so a restore brings back all of the above.
+
+### 5.7 App shell
 
 - Installable: web app manifest, icons (white knight on blue), service worker that caches every file (about 9 MB, mostly the engine) so the app works offline.
 - When a new version is published, an **Update** bar appears; tapping it switches to the new version.
@@ -94,7 +105,8 @@ Nine players: Morphy, Anderssen, Capablanca, Tal, Fischer, Karpov, Kasparov, Pol
 - `web/review.html`: markup and CSS for all four tabs. `web/js/shared.js` (board, engine wrapper, storage), `review.js`, `learn.js`, `legends.js`; `web/app/app.js` (installed-app extras).
 - Data files (generated, do not hand-edit): `data.js` (opening book, piece images, sample game), `content.js` (courses, lessons, puzzles), `legends.js` (legends, their courses and famous games).
 - Engine: `engine/stockfish-17.1-lite-single-*.js/.wasm` (single-threaded WebAssembly, runs without special server headers), fallback `engine/stockfish-10-asm.js` (pure JavaScript). Both run in a Web Worker and speak UCI. chess.js 0.10.3 handles rules and PGN.
-- Storage: `localStorage` keys `bc.progress` (openings, lessons, legends, puzzle rating), `bc.history` (full reviews), `bc.username`, `bc.botLevel`, `bc.ccgames` (loaded chess.com games), `bc.summaries` (per-game summaries for Insights), `bc.trainer` (Daily training positions and days trained), `bc.goal`, `bc.insTc`, `bc.ccOpenings` (opening-name cache).
+- Storage: `localStorage` keys `bc.progress` (openings, lessons, legends, puzzle rating), `bc.history` (full reviews), `bc.username`, `bc.botLevel`, `bc.ccgames` (loaded chess.com games), `bc.summaries` (per-game summaries for Insights), `bc.trainer` (Daily training positions and days trained), `bc.goal`, `bc.insTc`, `bc.ccOpenings` (opening-name cache), `bc.ccstats` (latest chess.com ratings), `bc.ratingLog`, `bc.mainTc`, `bc.autoSync`, `bc.activity` (training per day), `bc.achievements`.
+- `js/progress.js`: plan, milestones, achievements, weekly report and the activity log (`BC.activity`).
 - `js/mygames.js`: chess.com import, auto-review queue, summaries and trainer storage (`BC.stats`). `js/insights.js`: the Insights tab. `puzzles.js`: the rated puzzle set. The same code also runs as a claude.ai artifact, where it syncs to the owner's account; in the installed app it stays local.
 
 ## 7. Content quality checks

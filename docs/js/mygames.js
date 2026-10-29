@@ -61,6 +61,7 @@ const stats = BC.stats = {
     const k = dayKey();
     t.days[k] = (t.days[k] || 0) + 1;
     this.saveTrainer(t);
+    if (BC.activity) BC.activity.bump('trainer');
     BC.emit('trainer');
   },
   streak() {
@@ -101,7 +102,7 @@ const slim = (gm, user) => {
 // Only standard chess from the monthly archives: these contain finished games only.
 const usable = gm => gm.rules === 'chess' && gm.pgn && !/\[SetUp "1"\]/.test(gm.pgn);
 
-async function loadGames({ user, older = false } = {}) {
+async function loadGames({ user, older = false, quick = false } = {}) {
   if (CC.busy) return;
   const d = ccStore();
   user = (user || d.user || '').trim().toLowerCase();
@@ -116,12 +117,15 @@ async function loadGames({ user, older = false } = {}) {
       const seen = new Set(d.games.map(x => x.url));
       let added = 0;
       // Newest month first; keep going back until there are enough games.
-      while (d.next >= 0 && (added < 25 || d.next >= d.archives.length - 1)) {
+      // Newest month first; a quick sync checks the last two months, a full load keeps going until there are enough games.
+      const months = quick && d.games.length ? 2 : 3;
+      while (d.next >= 0 && (quick || added < 25 || d.next >= d.archives.length - 1)) {
         const { games } = await getJSON(d.archives[d.next]);
         d.next--;
         for (const gm of (games || []).filter(usable)) if (!seen.has(gm.url)) { d.games.push(slim(gm, user)); seen.add(gm.url); added++; }
-        if (d.archives.length - 1 - d.next >= 3) break;
+        if (d.archives.length - 1 - d.next >= months) break;
       }
+      CC.lastAdded = added;
     } else if (d.next >= 0) {
       const { games } = await getJSON(d.archives[d.next]);
       d.next--;
@@ -145,11 +149,11 @@ async function loadGames({ user, older = false } = {}) {
 // =====================================================================
 // Auto-review
 // =====================================================================
-async function autoReview(n = 10) {
+async function autoReview(n = 10, { quiet = false } = {}) {
   if (CC.auto) return;
   const d = ccStore();
   const todo = d.games.filter(x => !stats.has(x.url)).slice(0, n);
-  if (!todo.length) { CC.error = ''; CC.autoDone = 'All your loaded games are already reviewed.'; renderCC(); return; }
+  if (!todo.length) { if (!quiet) { CC.error = ''; CC.autoDone = 'All your loaded games are already reviewed.'; renderCC(); } return; }
   CC.auto = { i: 0, n: todo.length, stop: false, pos: 0, of: 1 }; CC.autoDone = ''; renderCC();
   const cfg = BC.review.DEPTH.fast;
   let done = 0;
@@ -169,7 +173,7 @@ async function autoReview(n = 10) {
       stats.add(summary, mistakes);
       done++;
     }
-    CC.autoDone = done ? `Reviewed ${done} game${done > 1 ? 's' : ''}. Your mistakes are in Daily training, and Insights is updated.` : '';
+    CC.autoDone = done ? `Reviewed ${done} game${done > 1 ? 's' : ''}. Your mistakes are in Daily training, and Progress is updated.` : '';
   } catch (e) {
     CC.error = 'Stockfish could not start in this browser, so the games could not be reviewed.';
   } finally {
@@ -203,7 +207,12 @@ function renderCC() {
       <form class="row ccform" id="ccForm"><label for="ccUser">chess.com username<input id="ccUser" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
       <button class="btn" ${CC.busy ? 'disabled' : ''}>${CC.busy ? 'Loading…' : 'Load my games'}</button></form>${err}
       <p class="opening">Uses chess.com's free public data. Only finished games are loaded.</p>`;
-    $('ccForm').addEventListener('submit', e => { e.preventDefault(); loadGames({ user: $('ccUser').value }); });
+    $('ccForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      await loadGames({ user: $('ccUser').value });
+      const now = ccStore();
+      if (now.user && !CC.error) { syncStats(now.user); if (syncOn()) autoReview(5, { quiet: true }); }
+    });
     return;
   }
   const list = d.games.slice(0, CC.showAll ? 60 : 6);
@@ -216,7 +225,9 @@ function renderCC() {
   }).join('');
   const auto = CC.auto ? `<div class="progress" id="ccAuto"><div class="bar"><i></i></div><p></p></div>` : '';
   el.innerHTML = `<h2>Your chess.com games</h2>
-    <p class="opening"><b>${esc(d.user)}</b> · ${d.games.length} finished games loaded${d.fetchedAt ? ` · updated ${fmtDate(d.fetchedAt)}` : ''}</p>
+    <p class="opening"><b>${esc(d.user)}</b> · ${d.games.length} finished games loaded${d.fetchedAt ? ` · updated ${ago(d.fetchedAt)}` : ''}</p>
+    <p class="opening syncline">${syncOn() ? `<b>Auto-sync on.</b> New games load and get reviewed when you open the app.${CC.syncNote ? ` ${esc(CC.syncNote)}` : ''}` : 'Auto-sync is off.'}
+      <button class="linkbtn" data-act="toggleSync">${syncOn() ? 'Turn off' : 'Turn on'}</button></p>
     ${d.games.length ? `<ul class="lines ccgames">${rows}</ul>` : `<p class="body">No finished games found yet.</p>`}
     <div class="acts">
       ${d.games.length > 6 ? `<button class="btn ghost" data-act="more">${CC.showAll ? 'Show fewer' : `Show more (${Math.min(60, d.games.length)})`}</button>` : ''}
@@ -228,7 +239,7 @@ function renderCC() {
       ${CC.auto ? `${auto}<button class="btn ghost" data-act="stopAuto">Stop</button>`
         : `<p class="body">${unreviewed ? `<b>${unreviewed}</b> game${unreviewed > 1 ? 's' : ''} not reviewed yet.` : 'All loaded games are reviewed.'} Auto-review fills Insights and Daily training. Keep the app open while it runs.</p>
            ${unreviewed ? `<button class="btn" data-act="auto">Auto-review my last ${Math.min(10, unreviewed)} games</button>` : ''}`}
-      ${CC.autoDone ? `<p class="body fb-ok">${esc(CC.autoDone)} <a href="#insights">See Insights</a></p>` : ''}
+      ${CC.autoDone ? `<p class="body fb-ok">${esc(CC.autoDone)} <a href="#insights">See Progress</a></p>` : ''}
     </div>${err}
     <p class="opening">Only finished games are loaded. Fair play: never review a game that is still going.</p>`;
   renderAutoProgress();
@@ -241,11 +252,59 @@ function renderCC() {
     older: () => loadGames({ older: true }),
     refresh: () => loadGames(),
     change: () => { const s = ccStore(); s.user = ''; ccSave(s); CC.error = ''; renderCC(); },
+    toggleSync: () => { BC.local.set('bc.autoSync', !syncOn()); CC.syncNote = ''; renderCC(); if (syncOn()) autoSync({ force: true }); },
     auto: () => autoReview(10),
     stopAuto: () => { if (CC.auto) CC.auto.stop = true; },
   };
   el.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => acts[b.dataset.act]()));
 }
+
+// =====================================================================
+// Auto-sync: new games and ratings, whenever the app is opened
+// =====================================================================
+const SYNC_EVERY = 10 * 60000;
+const syncOn = () => BC.local.get('bc.autoSync', true) !== false;
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : fmtDate(t); };
+function logRatings(st) {
+  const log = BC.local.get('bc.ratingLog', []);
+  for (const tc of ['rapid', 'blitz', 'bullet', 'daily']) {
+    const r = st[tc] && st[tc].rating;
+    if (!r) continue;
+    const last = log.filter(e => e.tc === tc).pop();
+    if (!last || last.r !== r || st.at - last.t > 86400000) log.push({ t: st.at, tc, r, src: 'chess.com' });
+  }
+  BC.local.set('bc.ratingLog', log.slice(-800));
+}
+async function syncStats(user) {
+  try {
+    const s = await getJSON(API + encodeURIComponent(user) + '/stats');
+    const pick = k => (s[k] && s[k].last ? { rating: s[k].last.rating, best: s[k].best ? s[k].best.rating : null,
+      bestAt: s[k].best ? s[k].best.date * 1000 : null, record: s[k].record || null } : null);
+    const st = { at: Date.now(), rapid: pick('chess_rapid'), blitz: pick('chess_blitz'), bullet: pick('chess_bullet'), daily: pick('chess_daily') };
+    BC.local.set('bc.ccstats', st);
+    logRatings(st);
+    BC.emit('ccstats');
+  } catch (e) { /* ratings also come from the games themselves */ }
+}
+async function autoSync({ force = false } = {}) {
+  const d = ccStore();
+  if (!d.user || !syncOn() || CC.busy || CC.auto || inClaudePage() || !navigator.onLine) return;
+  if (!force && Date.now() - (d.fetchedAt || 0) < SYNC_EVERY) return;
+  CC.lastAdded = 0;
+  await loadGames({ quick: true });
+  if (CC.error) return;
+  await syncStats(d.user);
+  const n = CC.lastAdded || 0;
+  CC.syncNote = n ? `Found ${n} new game${n > 1 ? 's' : ''}.` : '';
+  renderCC();
+  if (BC.local.get('bc.autoReviewNew', true) !== false) autoReview(5, { quiet: true });
+}
+BC.cc.sync = autoSync;
+BC.cc.syncStats = syncStats;
+BC.cc.syncOn = syncOn;
+setTimeout(() => autoSync(), 1500);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) autoSync(); });
+window.addEventListener('online', () => autoSync());
 
 // Bring mistakes from games reviewed before this feature existed into the trainer.
 async function migrate() {

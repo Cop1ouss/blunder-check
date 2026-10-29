@@ -172,6 +172,7 @@ function finishLine() {
   r.due = now() + INTERVAL[r.lv] * DAY - 3600000; r.n = (r.n || 0) + 1;
   sync.progress.openings[O.line.id] = r;
   sync.saveProgress();
+  if (BC.activity) BC.activity.bump('openings');
   O.done = true;
   renderOpenings();
 }
@@ -188,6 +189,7 @@ const RATED = { id: 'rated', cat: 'Training', title: 'Rated puzzles',
     'Puzzle ratings here are estimates and are not the same scale as chess.com puzzle ratings.'] };
 const RUSH = { id: 'rush', cat: 'Training', title: 'Puzzle Rush',
   body: ['Solve as many puzzles as you can in 3 minutes. They get harder as you go. Three wrong moves and the run ends.'] };
+const FOCUSL = { id: 'focus', cat: 'Training', title: 'Focus puzzles', body: [] };
 const POOL = window.BC_PUZZLES || [];
 const RUSH_MS = 180000;
 const L = { lesson: null, kind: 'lesson', puzzles: [], pi: 0, sel: {}, stage: 'solve', fen: null, tries: 0, fb: null, reveal: false, hint: false, solvedNow: false, drill: null, checking: false, rush: null, scored: false };
@@ -286,6 +288,8 @@ function renderLessonsHome() {
     ${st.days ? `<p class="opening streak"><b>${st.days}-day streak</b>${st.today ? ' · trained today' : ' · train today to keep it going'}</p>` : ''}
     <ul class="lines">
       <li><button data-act="open" data-id="daily" ${tc.total ? '' : 'disabled'}><span>Daily training<span class="sub">Your own mistakes, with spaced repetition${tc.total ? ` · ${tc.total} positions` : ''}</span></span>${dailyChip}</button></li>
+      ${POOL.length && BC.progress ? (() => { const f = BC.progress.focus(), n = BC.activity ? BC.activity.today('focus') : 0;
+        return `<li><button data-act="open" data-id="focus"><span>Focus puzzles: ${esc(f.label)}<span class="sub">${f.personal ? 'Your most common mistake' : 'The most common mistake under 400'}</span></span><span class="chip ${n >= 10 ? 'ok' : 'due'}">${Math.min(10, n)}/10 today</span></button></li>`; })() : ''}
       <li><button data-act="open" data-id="rated" ${POOL.length ? '' : 'disabled'}><span>Rated puzzles<span class="sub">${POOL.length} puzzles · ${r.n} solved or tried</span></span><span class="chip ok">Rating ${r.rating}</span></button></li>
       <li><button data-act="open" data-id="rush" ${POOL.length ? '' : 'disabled'}><span>Puzzle Rush<span class="sub">3 minutes, 3 strikes</span></span><span class="chip ${r.rushBest ? 'ok' : 'new'}">${r.rushBest ? `Best ${r.rushBest}` : 'New'}</span></button></li>
     </ul></div>
@@ -305,6 +309,12 @@ function openLesson(id) {
     puzzles = p ? [p] : [];
   } else if (id === 'rush') {
     l = RUSH; kind = 'rush'; puzzles = [];
+  } else if (id === 'focus') {
+    const f = BC.progress ? BC.progress.focus() : { theme: 'save', title: 'Focus', tip: '', label: 'hanging pieces' };
+    l = { ...FOCUSL, title: `Focus: ${f.title}`, body: [`Ten puzzles on ${f.label}${f.personal ? ', the mistake you make most in your own games' : ''}.`, f.tip] };
+    kind = 'focus';
+    const done = pz().done, r = pz().rating;
+    puzzles = POOL.filter(p => p.theme === f.theme).sort((a, b) => ((done[a.id] != null) - (done[b.id] != null)) || Math.abs(a.rating - r) - Math.abs(b.rating - r)).slice(0, 10);
   } else if (!l) return;
   else puzzles = l.puzzles || [];
   const rec = lessonRec(l.id);
@@ -354,7 +364,7 @@ function puzzleHTML() {
   return `<div class="puzhead"><span class="chip side ${turnOf(p.fen)}">${side} to move</span><span class="opening">${head}</span></div>
     <p class="body"><b>${esc(prompt)}</b></p>${fb}${explain}
     <div class="acts">
-      ${done ? `<button class="btn" data-act="${last ? 'home' : 'nextP'}">${last ? (L.kind === 'daily' ? 'Finish training' : 'Finish lesson') : L.kind === 'rated' ? 'Next puzzle' : 'Next position'}</button>`
+      ${done ? `<button class="btn" data-act="${last ? 'home' : 'nextP'}">${last ? (L.kind === 'lesson' ? 'Finish lesson' : 'Finish training') : L.kind === 'rated' ? 'Next puzzle' : 'Next position'}</button>`
         : `${L.hint ? '' : '<button class="btn ghost" data-act="hint">Hint</button>'}<button class="btn ghost" data-act="reveal">Show answer</button>`}
       ${!done && L.played.length ? '<button class="btn ghost" data-act="retryP">Start over</button>' : ''}
       <button class="btn ghost" data-act="home">All lessons</button>
@@ -455,6 +465,7 @@ async function tapLesson(nm) {
   if (L.kind === 'rush') {
     const R = L.rush;
     R.score++; R.wait = true; L.fb = { ok: true, msg: `${m.san}! Correct.` };
+    if (BC.activity) BC.activity.bump('puzzles');
     renderLessons();
     setTimeout(() => { R.wait = false; if (!R.over) nextRushPuzzle(); }, 450);
     return;
@@ -466,6 +477,7 @@ async function tapLesson(nm) {
     extra = ` Rating ${L.change >= 0 ? '+' : ''}${L.change} (now ${pz().rating}).`;
   }
   if (L.kind === 'daily' && BC.stats) BC.stats.record(p.id, L.tries === 0 && !L.hint ? 'good' : 'ok');
+  if (BC.activity && L.kind !== 'daily') BC.activity.bump(L.kind === 'focus' ? 'focus' : 'puzzles');
   L.fb = { ok: true, msg: (p.theme === 'mine' && uci !== p.best ? `Good find! ${m.san} works too.` : `Correct! ${m.san}${ch.in_checkmate() ? ' is checkmate' : ''}.`) + extra };
   markSolved(p.id);
   renderLessons();
@@ -520,7 +532,7 @@ function endDrill(d, afterMine) {
   if (afterMine && d.count >= d.spec.limit) { d.status = 'lost'; d.msg = `Out of moves. You need to mate within ${d.spec.limit}. Re-read the plan above and try again.`; return true; }
   return false;
 }
-function markDrill() { const rec = lessonRec(L.lesson.id); sync.progress.lessons[L.lesson.id] = { solved: rec.solved, done: true }; sync.saveProgress(); }
+function markDrill() { if (BC.activity) BC.activity.bump('lessons'); const rec = lessonRec(L.lesson.id); sync.progress.lessons[L.lesson.id] = { solved: rec.solved, done: true }; sync.saveProgress(); }
 
 const LACT = {
   home: () => { if (L.rush) { clearInterval(L.rush.timer); L.rush = null; } L.lesson = null; L.drill = null; L.kind = 'lesson'; renderLessons(); },
@@ -557,6 +569,6 @@ BC.on('view', name => {
   if (name === 'lessons') renderLessons();
 });
 BC.on('sync', () => { if (!$('view-openings').hidden) renderOpenings(); if (!$('view-lessons').hidden) renderLessons(); });
-['stats', 'trainer'].forEach(ev => BC.on(ev, () => { if (!$('view-lessons').hidden && !L.lesson) renderLessons(); }));
+['stats', 'trainer', 'activity'].forEach(ev => BC.on(ev, () => { if (!$('view-lessons').hidden && !L.lesson) renderLessons(); }));
 BC.learn = { get openings() { return O; }, get lessons() { return L; } };
 })();

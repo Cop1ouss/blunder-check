@@ -46,7 +46,10 @@ if (!standalone && ios) {
 // ---------- backups ----------
 const say = msg => { $('backupMsg').textContent = msg; };
 $('backupBtn').addEventListener('click', () => {
-  const data = { app: 'blunder-check', version: 1, savedAt: new Date().toISOString(),
+  // Everything the app keeps: progress, reviews, chess.com games, training, achievements.
+  const keys = {};
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('bc.')) keys[k] = localStorage.getItem(k); } } catch (e) { /* storage blocked */ }
+  const data = { app: 'blunder-check', version: 2, savedAt: new Date().toISOString(), keys,
     progress: BC.sync.progress, history: BC.local.get('bc.history', []), username: BC.local.get('bc.username', '') };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -62,6 +65,7 @@ $('restoreFile').addEventListener('change', async e => {
   try {
     const d = JSON.parse(await file.text());
     if (d.app !== 'blunder-check' || !d.progress) throw new Error('not a backup');
+    if (d.keys) { for (const [k, v] of Object.entries(d.keys)) if (k.startsWith('bc.')) localStorage.setItem(k, v); }
     BC.local.set('bc.progress', d.progress);
     BC.local.set('bc.history', d.history || []);
     if (d.username) BC.local.set('bc.username', d.username);

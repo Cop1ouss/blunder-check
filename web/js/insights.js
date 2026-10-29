@@ -121,10 +121,12 @@ function render() {
   const el = $('insPanel'); if (!el) return;
   const rows = dataset();
   if (!rows.length) {
-    el.innerHTML = `<section class="card ins-empty"><h2>Insights</h2>
-      <p class="body">Insights show what your games say about your chess: your rating toward your goal, your results with each color and opening, and the mistakes you make most.</p>
-      <p class="body"><b>Load your chess.com games</b> on the Review tab, or review any game. Insights fill in as you go.</p>
-      <div class="acts"><a class="btn" href="#review">Load my games</a></div></section>`;
+    el.innerHTML = BC.progress.planHTML() + `<div class="inscols">${BC.progress.ladderHTML()}${BC.progress.achievementsHTML()}
+      <section class="card ins-empty"><h2>Your games</h2>
+      <p class="body">Progress shows what your games say about your chess: your rating toward your goal, your results with each color and opening, and the mistakes you make most.</p>
+      <p class="body"><b>Add your chess.com username</b> on the Review tab. New games then load and get reviewed automatically every time you open the app.</p>
+      <div class="acts"><a class="btn" href="#review">Add my chess.com username</a></div></section></div>`;
+    BC.progress.bind(el);
     return;
   }
   const present = TCS.filter(t => rows.some(r => r.tc === t));
@@ -138,23 +140,23 @@ function render() {
   let html = `<div class="filters" role="group" aria-label="Time control">${['all', ...present].map(t =>
     `<button data-tc="${t}" aria-pressed="${S.tc === t}">${TC[t]} <span class="muted">${t === 'all' ? rows.length : rows.filter(r => r.tc === t).length}</span></button>`).join('')}</div>`;
 
-  // Rating and goal
-  if (rated.length) {
-    const cur = rated[rated.length - 1].myRating, start = rated[0].myRating;
-    const monthAgo = rated.filter(r => r.date <= Date.now() - 30 * 86400000).pop();
-    const delta = monthAgo ? cur - monthAgo.myRating : cur - start;
-    const goal = S.goal, span = goal - start;
-    const prog = span > 0 ? clamp((cur - start) / span, 0, 1) : cur >= goal ? 1 : 0;
+  // Plan, milestones, achievements, this week
+  html = BC.progress.planHTML() + `<div class="inscols">${BC.progress.ladderHTML()}${BC.progress.achievementsHTML()}${BC.progress.weekHTML(rows)}</div>` + html;
+
+  // Rating over time
+  const series = BC.progress.ratingSeries(ratingTc, rows);
+  if (series.length >= 2) {
+    const cur = series[series.length - 1].r, start = series[0].r;
+    const monthAgo = series.filter(p => p.t <= Date.now() - 30 * 86400000).pop();
+    const delta = monthAgo ? cur - monthAgo.r : cur - start;
     html += `<section class="card hero">
-      <div class="herotop"><div><h2>${TC[ratingTc]} rating</h2><p class="heronum">${cur}</p>
-        <p class="delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta} ${monthAgo ? 'in the last 30 days' : `since ${fmtDate(rated[0].date)}`}</p></div>
-        <form class="goalform" id="goalForm"><label for="goalIn">Goal</label><input id="goalIn" type="number" inputmode="numeric" min="100" max="3000" step="25" value="${goal}"><button class="btn ghost">Set</button></form></div>
-      <div class="meter goal" role="meter" aria-valuemin="${start}" aria-valuemax="${goal}" aria-valuenow="${cur}" aria-label="Progress to goal"><i style="width:${(prog * 100).toFixed(1)}%"></i></div>
-      <p class="opening">${cur >= goal ? `Goal reached! Set a new one.` : `<b>${goal - cur}</b> points to go. Started at ${start}.`}</p>
-      ${rated.length >= 2 ? `<div class="chart" id="ratingChart"></div>
+      <div class="herotop"><div><h2>${TC[ratingTc]} rating over time</h2>
+        <p class="delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta} ${monthAgo ? 'in the last 30 days' : `since ${fmtDate(series[0].t)}`}</p></div>
+        <form class="goalform" id="goalForm"><label for="goalIn">Goal</label><input id="goalIn" type="number" inputmode="numeric" min="100" max="3000" step="25" value="${S.goal}"><button class="btn ghost">Set</button></form></div>
+      <div class="chart" id="ratingChart"></div>
       <details class="tableview"><summary>Show as a table</summary><div class="tablewrap"><table class="tally"><thead><tr><td>Date</td><td>Result</td><td>Opponent</td><td class="n">Rating</td></tr></thead><tbody>
         ${rated.slice(-15).reverse().map(r => `<tr><td>${fmtDate(r.date)}</td><td>${r.result === 'win' ? 'Won' : r.result === 'loss' ? 'Lost' : 'Draw'}</td><td>${esc(r.opp)}</td><td class="n">${r.myRating}</td></tr>`).join('')}
-      </tbody></table></div></details>` : ''}
+      </tbody></table></div></details>
     </section>`;
   }
 
@@ -230,6 +232,7 @@ function render() {
     ${endRow('Won by', 'win')}${endRow('Lost by', 'loss')}${endRow('Drawn by', 'draw')}</tbody></table></div>${endTip(sel)}</section></div>`;
 
   el.innerHTML = html;
+  BC.progress.bind(el);
   el.querySelectorAll('[data-tc]').forEach(b => b.addEventListener('click', () => { S.tc = b.dataset.tc; BC.local.set('bc.insTc', S.tc); render(); }));
   const gf = $('goalForm');
   if (gf) gf.addEventListener('submit', e => { e.preventDefault(); const v = parseInt($('goalIn').value, 10); if (v > 0) { S.goal = v; BC.local.set('bc.goal', v); render(); } });
@@ -237,7 +240,8 @@ function render() {
   el.querySelectorAll('[data-daily]').forEach(a => a.addEventListener('click', () => BC.emit('openLesson', 'daily')));
   el.querySelectorAll('[data-auto]').forEach(b => b.addEventListener('click', () => BC.emit('autoReview', 10)));
   S.draw = () => {
-    if ($('ratingChart')) lineChart($('ratingChart'), rated.map(r => ({ x: r.date, y: r.myRating, label: `${fmtDate(r.date)} · ${r.result === 'win' ? 'Won' : r.result === 'loss' ? 'Lost' : 'Draw'} vs ${r.opp}` })),
+    const byT = Object.fromEntries(rated.map(r => [r.date, r]));
+    if ($('ratingChart')) lineChart($('ratingChart'), series.map(p => { const r = byT[p.t]; return { x: p.t, y: p.r, label: r ? `${fmtDate(p.t)} · ${r.result === 'win' ? 'Won' : r.result === 'loss' ? 'Lost' : 'Draw'} vs ${r.opp}` : `${fmtDate(p.t)} · from ${p.src}` }; }),
       { ref: { y: S.goal, label: `Goal ${S.goal}` }, name: `${TC[ratingTc]} rating over time` });
     if ($('accChart')) lineChart($('accChart'), reviewed.map(r => ({ x: r.date, y: r.sum.acc, label: `${fmtDate(r.date)} vs ${r.opp}` })),
       { yMin: 0, yMax: 100, fmt: v => String(Math.round(v)), name: 'Accuracy by game' });
@@ -266,6 +270,6 @@ function endTip(sel) {
 let resizeTimer = null;
 window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (!$('view-insights').hidden && S.draw) S.draw(); }, 150); });
 BC.on('view', name => { if (name === 'insights') render(); });
-['stats', 'ccgames'].forEach(ev => BC.on(ev, () => { if (!$('view-insights').hidden) render(); }));
+['stats', 'ccgames', 'ccstats', 'achievements', 'activity', 'trainer'].forEach(ev => BC.on(ev, () => { if (!$('view-insights').hidden) render(); }));
 BC.insights = { render, dataset };
 })();
