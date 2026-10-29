@@ -1,0 +1,110 @@
+[
+ {
+  "move_no": 4,
+  "fen": "r1bqkbnr/pppp1ppp/8/4p3/2BnP3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+  "played": "Nxe5",
+  "best": "Nxd4",
+  "best_uci": "f3d4",
+  "kind": "mistake",
+  "drop": 159,
+  "tag": "allowed_fork",
+  "lesson": "This allowed Qg5, which attacks two things at once: your pawn on g2 and your knight on e5. You can't save both. Look for squares where one enemy piece could hit two of yours.",
+  "game": "You vs Opponent"
+ },
+ {
+  "move_no": 5,
+  "fen": "r1b1kbnr/pppp1ppp/8/4N1q1/2BnP3/8/PPPP1PPP/RNBQK2R w KQkq - 1 5",
+  "played": "Nxf7",
+  "best": "O-O",
+  "best_uci": "e1g1",
+  "kind": "blunder",
+  "drop": 400,
+  "tag": "hung_piece",
+  "lesson": "You hung your pawn on g2 -- it was left unprotected, and they can take it with Qxg2. Blunder check: is the square I'm moving to attacked? Did my move leave anything undefended?",
+  "game": "You vs Opponent"
+ },
+ {
+  "move_no": 6,
+  "fen": "r1b1kbnr/pppp1Npp/8/8/2BnP3/8/PPPP1PqP/RNBQK2R w KQkq - 0 6",
+  "played": "Rf1",
+  "best": "d3",
+  "best_uci": "d2d3",
+  "kind": "blunder",
+  "drop": 207,
+  "tag": "hung_piece",
+  "lesson": "You hung your pawn on e4 -- it was left unprotected, and they can take it with Qxe4+. Blunder check: is the square I'm moving to attacked? Did my move leave anything undefended?",
+  "game": "You vs Opponent"
+ },
+ {
+  "move_no": 7,
+  "fen": "r1b1kbnr/pppp1Npp/8/8/2Bnq3/8/PPPP1P1P/RNBQKR2 w Qkq - 0 7",
+  "played": "Be2",
+  "best": "Qe2",
+  "best_uci": "d1e2",
+  "kind": "blunder",
+  "drop": 785,
+  "tag": "allowed_mate",
+  "lesson": "This move let your opponent force checkmate in 1 (starting with Nf3#). Before moving, ask: what checks can they give me?",
+  "game": "You vs Opponent"
+ },
+ {
+  "move_no": 4,
+  "fen": "rn1qkbnr/ppp2ppp/3p4/4p3/2B1P1b1/2N2N2/PPPP1PPP/R1BQK2R b KQkq - 3 4",
+  "played": "g6",
+  "best": "Nc6",
+  "best_uci": "b8c6",
+  "kind": "mistake",
+  "drop": 118,
+  "tag": "other",
+  "lesson": "Stronger was Nc6. Your move allowed Nxe5 -- set it up on the board and see what it does.",
+  "game": "Opponent vs You"
+ },
+ {
+  "move_no": 5,
+  "fen": "rn1qkbnr/ppp2p1p/3p2p1/4N3/2B1P1b1/2N5/PPPP1PPP/R1BQK2R b KQkq - 0 5",
+  "played": "Bxd1",
+  "best": "dxe5",
+  "best_uci": "d6e5",
+  "kind": "blunder",
+  "drop": 1314,
+  "tag": "allowed_mate",
+  "lesson": "This move let your opponent force checkmate in 2 (starting with Bxf7+). Before moving, ask: what checks can they give me?",
+  "game": "Opponent vs You"
+ },
+ {
+  "move_no": 4,
+  "fen": "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+  "played": "Ng5",
+  "best": "c3",
+  "best_uci": "c2c3",
+  "kind": "blunder",
+  "drop": 475,
+  "tag": "hung_piece",
+  "lesson": "You hung your knight on g5 -- you just moved it there, and they can take it with Qxg5. Blunder check: is the square I'm moving to attacked? Did my move leave anything undefended?",
+  "game": "You vs Opponent"
+ },
+ {
+  "move_no": 5,
+  "fen": "r1b1k1nr/pppp1ppp/2n5/2b1p1q1/2B1P3/8/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+  "played": "d3",
+  "best": "O-O",
+  "best_uci": "e1g1",
+  "kind": "mistake",
+  "drop": 111,
+  "tag": "hung_piece",
+  "lesson": "You hung your pawn on g2 -- it was left unprotected, and they can take it with Qxg2. Blunder check: is the square I'm moving to attacked? Did my move leave anything undefended?",
+  "game": "You vs Opponent"
+ },
+ {
+  "move_no": 9,
+  "fen": "r1b1k2r/pppp1ppp/2n2n2/4p3/2B1P3/3P4/PPP2K1P/RNBQ4 w kq - 1 9",
+  "played": "Bxf7+",
+  "best": "Qg1",
+  "best_uci": "d1g1",
+  "kind": "blunder",
+  "drop": 369,
+  "tag": "hung_piece",
+  "lesson": "You hung your bishop on f7 -- you just moved it there, and they can take it with Kxf7. Blunder check: is the square I'm moving to attacked? Did my move leave anything undefended?",
+  "game": "You vs Opponent"
+ }
+]

@@ -1,0 +1,20 @@
+[Event "Sample: Blackburne Shilling trap"]
+[White "You"]
+[Black "Opponent"]
+[Result "0-1"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4 4. Nxe5 Qg5 5. Nxf7 Qxg2 6. Rf1 Qxe4+ 7. Be2 Nf3# 0-1
+
+[Event "Sample: Legal's mate"]
+[White "Opponent"]
+[Black "You"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 Bxd1 6. Bxf7+ Ke7 7. Nd5# 1-0
+
+[Event "Sample: hanging pieces"]
+[White "You"]
+[Black "Opponent"]
+[Result "0-1"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. Ng5 Qxg5 5. d3 Qxg2 6. Rf1 Bxf2+ 7. Rxf2 Qxf2+ 8. Kxf2 Nf6 9. Bxf7+ Kxf7 0-1
