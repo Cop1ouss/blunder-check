@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      CHESSCOM_USER: ${{ vars.CHESSCOM_USER || 'Cop1ouss' }}
+      CHESSCOM_USER: ${{ vars.CHESSCOM_USER || 'copiouss' }}
     steps:
       - uses: actions/checkout@v4
 
