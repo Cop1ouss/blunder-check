@@ -218,12 +218,13 @@ BC.tapMove = (st, fen, nm) => {
 const MAX_REVIEWS = 30;
 const Sync = BC.sync = {
   db: null, uid: null,
-  progress: { openings: {}, lessons: {}, legends: { results: {}, guess: {} } },
+  progress: { openings: {}, lessons: {}, legends: { results: {}, guess: {} }, puzzles: { rating: 800, n: 0, done: {}, rushBest: 0 } },
   chain: Promise.resolve(), timer: null,
   get account() { return !!this.db; },
   async init() {
     const p = BC.local.get('bc.progress', null);
-    if (p) this.progress = { openings: p.openings || {}, lessons: p.lessons || {}, legends: { results: {}, guess: {}, ...(p.legends || {}) } };
+    if (p) this.progress = { openings: p.openings || {}, lessons: p.lessons || {}, legends: { results: {}, guess: {}, ...(p.legends || {}) },
+      puzzles: { rating: 800, n: 0, done: {}, rushBest: 0, ...(p.puzzles || {}) } };
     if (!window.claude || typeof window.claude.use !== 'function') return;
     try {
       const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
@@ -287,6 +288,9 @@ function merge(remote, local) {
   const out = { openings: { ...(remote.openings || {}) }, lessons: { ...(remote.lessons || {}) },
     legends: { results: { ...(ll.results || {}), ...(rl.results || {}) }, guess: { ...(rl.guess || {}) } } };
   for (const [id, v] of Object.entries(ll.guess || {})) out.legends.guess[id] = Math.max(v, out.legends.guess[id] || 0);
+  const rp = remote.puzzles || {}, lp = local.puzzles || {};
+  const base = (lp.n || 0) > (rp.n || 0) ? lp : rp;
+  out.puzzles = { rating: base.rating || 800, n: base.n || 0, done: { ...(rp.done || {}), ...(lp.done || {}) }, rushBest: Math.max(rp.rushBest || 0, lp.rushBest || 0) };
   for (const [id, v] of Object.entries(local.openings || {})) {
     const r = out.openings[id];
     if (!r || (v.n || 0) > (r.n || 0)) out.openings[id] = v;
@@ -299,7 +303,7 @@ function merge(remote, local) {
 }
 
 // ---------- views ----------
-const VIEWS = ['review', 'openings', 'lessons', 'legends'];
+const VIEWS = ['review', 'openings', 'lessons', 'legends', 'insights'];
 BC.showView = name => {
   if (!VIEWS.includes(name)) name = 'review';
   VIEWS.forEach(v => { BC.$('view-' + v).hidden = v !== name; });

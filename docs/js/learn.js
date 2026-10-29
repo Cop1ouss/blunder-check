@@ -180,9 +180,18 @@ function finishLine() {
 // Lessons
 // =====================================================================
 const lv = new BC.BoardView(document.querySelector('#view-lessons .boardbox'), tapLesson);
-const MINE = { id: 'mine', cat: 'Your games', title: 'Your own mistakes',
-  body: ['Positions from games you reviewed, where you made a mistake or blunder. Find the move you missed. This is the fastest way to stop repeating the same errors.'] };
-const L = { lesson: null, puzzles: [], pi: 0, sel: {}, stage: 'solve', fen: null, tries: 0, fb: null, reveal: false, hint: false, solvedNow: false, drill: null, checking: false, mine: null };
+const DAILY = { id: 'daily', cat: 'Training', title: 'Daily training',
+  body: ['Positions from your own games where you made a mistake or blunder. Find the move you missed.',
+    'Get one right on the first try and it comes back after a longer break (1, 2, 4, 8, 16, then 32 days). Miss it and it comes back tomorrow. A few minutes a day is enough.'] };
+const RATED = { id: 'rated', cat: 'Training', title: 'Rated puzzles',
+  body: ['Puzzles picked near your puzzle rating. Solve one on the first try and your rating goes up; miss it, or use a hint, and it goes down.',
+    'Puzzle ratings here are estimates and are not the same scale as chess.com puzzle ratings.'] };
+const RUSH = { id: 'rush', cat: 'Training', title: 'Puzzle Rush',
+  body: ['Solve as many puzzles as you can in 3 minutes. They get harder as you go. Three wrong moves and the run ends.'] };
+const POOL = window.BC_PUZZLES || [];
+const RUSH_MS = 180000;
+const L = { lesson: null, kind: 'lesson', puzzles: [], pi: 0, sel: {}, stage: 'solve', fen: null, tries: 0, fb: null, reveal: false, hint: false, solvedNow: false, drill: null, checking: false, rush: null, scored: false };
+const pz = () => sync.progress.puzzles || (sync.progress.puzzles = { rating: 800, n: 0, done: {}, rushBest: 0 });
 const PROMPT = {
   free: 'One of their pieces is unprotected. Win it.',
   fork: 'Find a move that attacks two things at once.',
@@ -198,10 +207,53 @@ function lessonStatus(l) {
   const n = (l.puzzles || []).length, s = (l.puzzles || []).filter(p => r.solved[p.id]).length;
   return s >= n && n ? '<span class="chip ok">Done</span>' : `<span class="chip ${s ? 'due' : 'new'}">${s}/${n}</span>`;
 }
-async function loadMine() { try { L.mine = await BC.review.myMistakes(); } catch (e) { L.mine = []; } if (!L.lesson) renderLessons(); }
+
+// ---------- rated puzzles and Puzzle Rush ----------
+function pickPuzzle(target, exclude) {
+  const done = pz().done;
+  const fresh = POOL.filter(p => !exclude.has(p.id) && done[p.id] == null);
+  const pool = fresh.length ? fresh : POOL.filter(p => !exclude.has(p.id));
+  if (!pool.length) return null;
+  for (const w of [100, 200, 400, 5000]) {
+    const near = pool.filter(p => Math.abs(p.rating - target) <= w);
+    if (near.length) return near[Math.floor(Math.random() * near.length)];
+  }
+  return pool[0];
+}
+function rate(p, score) {
+  const r = pz(), e = 1 / (1 + 10 ** ((p.rating - r.rating) / 400)), k = r.n < 20 ? 40 : 20;
+  const change = Math.round(k * (score - e));
+  r.rating = Math.max(100, r.rating + change); r.n++; r.done[p.id] = score;
+  sync.saveProgress();
+  return change;
+}
+function rushLeft() { return L.rush ? Math.max(0, L.rush.end - Date.now()) : 0; }
+function tickRush() {
+  const t = document.getElementById('rushClock');
+  if (!L.rush || L.rush.over) return;
+  const ms = rushLeft();
+  if (t) t.textContent = `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+  if (ms <= 0) endRush('Time is up!');
+}
+function endRush(why) {
+  const R = L.rush; if (!R || R.over) return;
+  R.over = true; R.why = why; clearInterval(R.timer);
+  const r = pz();
+  R.best = R.score > (r.rushBest || 0);
+  if (R.best) { r.rushBest = R.score; sync.saveProgress(); }
+  renderLessons();
+}
+function nextRushPuzzle() {
+  const R = L.rush;
+  const p = pickPuzzle(450 + R.score * 55, R.used);
+  if (!p) return endRush('You solved every puzzle!');
+  R.used.add(p.id);
+  L.puzzles = [p]; L.pi = 0; resetPuzzle();
+  renderLessons();
+}
 
 function renderLessons() {
-  $('view-lessons').classList.toggle('noboard', !L.lesson);
+  $('view-lessons').classList.toggle('noboard', !L.lesson || (L.kind === 'rush' && L.rush && L.rush.over));
   if (!L.lesson) return renderLessonsHome();
   const l = L.lesson;
   const body = l.body.map(t => t.startsWith('- ') ? null : `<p class="body">${esc(t)}</p>`);
@@ -211,9 +263,10 @@ function renderLessons() {
     else { if (inList) { html += '</ul>'; inList = false; } html += body[i]; }
   });
   if (inList) html += '</ul>';
-  const task = l.drill ? drillHTML() : puzzleHTML();
+  const task = l.drill ? drillHTML() : L.kind === 'rush' ? rushHTML() : puzzleHTML();
+  const openBody = L.kind === 'lesson' && L.pi === 0 && !L.drill?.started;
   $('lPanel').innerHTML = `<h2>${esc(l.cat)}</h2><h3 class="title">${esc(l.title)}</h3>
-    <details class="lessonbody" ${L.pi === 0 && !L.drill?.started ? 'open' : ''}><summary>Lesson</summary>${html}</details>
+    ${L.kind === 'rush' ? '' : `<details class="lessonbody" ${openBody ? 'open' : ''}><summary>${L.kind === 'lesson' ? 'Lesson' : 'How it works'}</summary>${html}</details>`}
     ${task}`;
   bind($('lPanel'), LACT);
   renderLessonBoard();
@@ -223,35 +276,66 @@ function renderLessonsHome() {
   $('lCaption').textContent = 'Pick a lesson';
   const cats = [];
   C.lessons.forEach(l => { if (!cats.includes(l.cat)) cats.push(l.cat); });
-  const mineCount = L.mine ? L.mine.length : null;
-  const mineRec = lessonRec('mine');
-  const mineSolved = L.mine ? L.mine.filter(p => mineRec.solved[p.id]).length : 0;
+  const tc = BC.stats ? BC.stats.counts() : { total: 0, due: 0 }, st = BC.stats ? BC.stats.streak() : { days: 0, today: 0 };
+  const r = pz();
+  const dailyChip = !tc.total ? '<span class="chip new">Review a game first</span>'
+    : tc.due ? `<span class="chip due">${Math.min(10, tc.due)} due today</span>` : '<span class="chip ok">All done today</span>';
   $('lPanel').innerHTML = `<h2>Lessons</h2>
     <p class="body">Short lessons on the ideas that matter most below 400, each with positions to solve. Work through them in order, a little every day.</p>
-    <div class="lessongroup"><h3>Your games</h3><ul class="lines">
-      <li><button data-act="open" data-id="mine" ${mineCount ? '' : 'disabled'}><span>Your own mistakes</span>${mineCount == null ? '<span class="chip new">…</span>'
-        : mineCount ? `<span class="chip ${mineSolved >= mineCount ? 'ok' : 'due'}">${mineSolved}/${mineCount}</span>` : '<span class="chip new">Review a game first</span>'}</button></li></ul></div>
+    <div class="lessongroup"><h3>Training</h3>
+    ${st.days ? `<p class="opening streak"><b>${st.days}-day streak</b>${st.today ? ' · trained today' : ' · train today to keep it going'}</p>` : ''}
+    <ul class="lines">
+      <li><button data-act="open" data-id="daily" ${tc.total ? '' : 'disabled'}><span>Daily training<span class="sub">Your own mistakes, with spaced repetition${tc.total ? ` · ${tc.total} positions` : ''}</span></span>${dailyChip}</button></li>
+      <li><button data-act="open" data-id="rated" ${POOL.length ? '' : 'disabled'}><span>Rated puzzles<span class="sub">${POOL.length} puzzles · ${r.n} solved or tried</span></span><span class="chip ok">Rating ${r.rating}</span></button></li>
+      <li><button data-act="open" data-id="rush" ${POOL.length ? '' : 'disabled'}><span>Puzzle Rush<span class="sub">3 minutes, 3 strikes</span></span><span class="chip ${r.rushBest ? 'ok' : 'new'}">${r.rushBest ? `Best ${r.rushBest}` : 'New'}</span></button></li>
+    </ul></div>
     ${cats.map(cat => `<div class="lessongroup"><h3>${esc(cat)}</h3><ul class="lines">${C.lessons.filter(l => l.cat === cat).map(l =>
       `<li><button data-act="open" data-id="${l.id}"><span>${esc(l.title)}</span>${lessonStatus(l)}</button></li>`).join('')}</ul></div>`).join('')}`;
   bind($('lPanel'), { open: d => openLesson(d.id) });
 }
 function openLesson(id) {
-  let l = C.lessons.find(x => x.id === id), puzzles;
-  if (id === 'mine') {
-    l = MINE;
-    const rec = lessonRec('mine');
-    puzzles = (L.mine || []).slice().sort((a, b) => (rec.solved[a.id] ? 1 : 0) - (rec.solved[b.id] ? 1 : 0)).slice(0, 20).map(p => ({ ...p, theme: 'mine' }));
+  if (L.rush) { clearInterval(L.rush.timer); L.rush = null; }
+  let l = C.lessons.find(x => x.id === id), puzzles, kind = 'lesson';
+  if (id === 'daily' || id === 'mine') {
+    l = DAILY; kind = 'daily';
+    puzzles = (BC.stats ? BC.stats.due(10) : []).map(p => ({ ...p, theme: 'mine' }));
+  } else if (id === 'rated') {
+    l = RATED; kind = 'rated';
+    const p = pickPuzzle(pz().rating, new Set());
+    puzzles = p ? [p] : [];
+  } else if (id === 'rush') {
+    l = RUSH; kind = 'rush'; puzzles = [];
   } else if (!l) return;
   else puzzles = l.puzzles || [];
   const rec = lessonRec(l.id);
-  const first = Math.max(0, puzzles.findIndex(p => !rec.solved[p.id]));
-  Object.assign(L, { lesson: l, puzzles, pi: first, drill: l.drill ? newDrill(l.drill) : null });
+  const first = kind === 'lesson' ? Math.max(0, puzzles.findIndex(p => !rec.solved[p.id])) : 0;
+  Object.assign(L, { lesson: l, kind, puzzles, pi: first, drill: l.drill ? newDrill(l.drill) : null });
+  if (kind === 'rush') {
+    L.rush = { start: Date.now(), end: Date.now() + RUSH_MS, score: 0, strikes: 0, used: new Set(), missed: [], over: false, timer: setInterval(tickRush, 250) };
+    return nextRushPuzzle();
+  }
   resetPuzzle();
   renderLessons();
 }
 function resetPuzzle() {
   const p = L.puzzles[L.pi];
-  Object.assign(L, { sel: {}, stage: 'solve', fen: p ? p.fen : null, tries: 0, fb: null, reveal: false, hint: false, solvedNow: false, played: [] });
+  Object.assign(L, { sel: {}, stage: 'solve', fen: p ? p.fen : null, tries: 0, fb: null, reveal: false, hint: false, solvedNow: false, played: [], scored: false });
+}
+function rushHTML() {
+  const R = L.rush;
+  if (R.over) {
+    return `<p class="rushscore"><span class="tl">Score</span><span class="heronum">${R.score}</span></p>
+      <p class="body ${R.best ? 'fb-ok' : ''}"><b>${esc(R.why)}</b> ${R.best ? 'New personal best!' : `Your best: ${pz().rushBest}.`}</p>
+      <div class="acts"><button class="btn" data-act="rushAgain">Play again</button><button class="btn ghost" data-act="home">All lessons</button></div>`;
+  }
+  const p = current();
+  const strikes = [0, 1, 2].map(i => `<span class="strike${i < R.strikes ? ' on' : ''}" aria-hidden="true">✕</span>`).join('');
+  let fb = L.fb ? `<p class="body ${L.fb.ok ? 'fb-ok' : 'fb-no'}">${esc(L.fb.msg)}</p>` : '';
+  return `<div class="rushbar"><span class="rushclock" id="rushClock" role="timer">3:00</span><span class="opening">Solved <b>${R.score}</b></span>
+      <span class="strikes" aria-label="${R.strikes} of 3 strikes">${strikes}</span></div>
+    ${p ? `<div class="puzhead"><span class="chip side ${turnOf(p.fen)}">${cName(turnOf(p.fen))} to move</span><span class="opening">Puzzle ${R.score + R.strikes + 1}</span></div>
+    <p class="body"><b>Find the best move.</b></p>` : ''}${fb}
+    <div class="acts"><button class="btn ghost" data-act="rushStop">End run</button></div>`;
 }
 function current() { return L.puzzles[L.pi]; }
 
@@ -259,16 +343,18 @@ function puzzleHTML() {
   const p = current();
   if (!p) return '<p class="body">No positions here yet.</p><div class="acts"><button class="btn ghost" data-act="home">All lessons</button></div>';
   const side = cName(turnOf(p.fen));
-  const prompt = p.theme === 'principle' ? p.prompt : p.theme === 'mine' ? `In your game (${p.label}) you played ${p.playedSan}. Find a better move.` : PROMPT[p.theme];
+  const prompt = p.theme === 'principle' ? p.prompt : p.theme === 'mine' ? `In your game (${p.label}) you played ${p.playedSan}. Find a better move.`
+    : L.kind === 'rated' ? 'Find the best move.' : PROMPT[p.theme];
   let fb = L.fb ? `<p class="body ${L.fb.ok ? 'fb-ok' : 'fb-no'}">${esc(L.fb.msg)}</p>` : '';
   if (L.checking) fb = '<p class="body muted">Checking your move…</p>';
   const done = L.solvedNow || L.reveal;
   const explain = done ? `<p class="body">${esc(explanation(p))}</p>` : '';
-  const last = L.pi >= L.puzzles.length - 1;
-  return `<div class="puzhead"><span class="chip side ${turnOf(p.fen)}">${side} to move</span><span class="opening">Position ${L.pi + 1} of ${L.puzzles.length}</span></div>
+  const last = L.kind !== 'rated' && L.pi >= L.puzzles.length - 1;
+  const head = L.kind === 'rated' ? `Your rating <b>${pz().rating}</b> · puzzle ${p.rating}` : `Position ${L.pi + 1} of ${L.puzzles.length}`;
+  return `<div class="puzhead"><span class="chip side ${turnOf(p.fen)}">${side} to move</span><span class="opening">${head}</span></div>
     <p class="body"><b>${esc(prompt)}</b></p>${fb}${explain}
     <div class="acts">
-      ${done ? `<button class="btn" data-act="${last ? 'home' : 'nextP'}">${last ? 'Finish lesson' : 'Next position'}</button>`
+      ${done ? `<button class="btn" data-act="${last ? 'home' : 'nextP'}">${last ? (L.kind === 'daily' ? 'Finish training' : 'Finish lesson') : L.kind === 'rated' ? 'Next puzzle' : 'Next position'}</button>`
         : `${L.hint ? '' : '<button class="btn ghost" data-act="hint">Hint</button>'}<button class="btn ghost" data-act="reveal">Show answer</button>`}
       ${!done && L.played.length ? '<button class="btn ghost" data-act="retryP">Start over</button>' : ''}
       <button class="btn ghost" data-act="home">All lessons</button>
@@ -313,11 +399,13 @@ function renderLessonBoard() {
   if (L.hint && !L.reveal && L.stage === 'solve') marks.push({ sq: p.best.slice(0, 2), color: 'var(--c-great)', pct: 60 });
   const arrows = L.reveal ? [{ uci: p.best, color: 'var(--c-best)' }] : [];
   const fen = L.reveal ? p.fen : L.fen;
-  lv.render({ fen, flipped: turnOf(p.fen) === 'b', marks, arrows, selected: L.sel.selected, targets: L.sel.targets, interactive: !L.solvedNow && !L.reveal && L.stage !== 'reply' && !L.checking });
+  const busy = L.solvedNow || L.reveal || L.stage === 'reply' || L.checking || (L.rush && (L.rush.over || L.rush.wait));
+  lv.render({ fen, flipped: turnOf(p.fen) === 'b', marks, arrows, selected: L.sel.selected, targets: L.sel.targets, interactive: !busy });
   $('lCaption').textContent = `${cName(turnOf(p.fen))} to move`;
 }
 
 function markSolved(id) {
+  if (L.kind !== 'lesson') return;
   const rec = { solved: { ...lessonRec(L.lesson.id).solved }, done: lessonRec(L.lesson.id).done };
   rec.solved[id] = 1;
   if (L.lesson.id !== 'mine' && L.puzzles.every(p => rec.solved[p.id])) rec.done = true;
@@ -328,7 +416,7 @@ async function tapLesson(nm) {
   if (!L.lesson) return;
   if (L.drill) return tapDrill(nm);
   const p = current();
-  if (!p || L.solvedNow || L.reveal || L.stage === 'reply' || L.checking) return;
+  if (!p || L.solvedNow || L.reveal || L.stage === 'reply' || L.checking || (L.rush && (L.rush.over || L.rush.wait))) return;
   const m = BC.tapMove(L.sel, L.fen, nm);
   if (!m) return renderLessonBoard();
   const uci = moveUci(m);
@@ -337,6 +425,15 @@ async function tapLesson(nm) {
   if (p.theme === 'mate2' && L.stage === 'solve2') ok = ch.in_checkmate();
   else if (p.theme === 'mine') ok = await checkMine(p, uci);
   else ok = p.accept.includes(uci) || (p.theme.startsWith('mate') || p.theme === 'backrank' ? ch.in_checkmate() : false);
+  if (!ok && L.kind === 'rush') {
+    const R = L.rush;
+    R.strikes++; R.missed.push(p.id); R.wait = true; L.reveal = true; L.sel = {};
+    L.fb = { ok: false, msg: `${m.san} isn't it. The answer was ${sanOf(p.fen, p.best)}.` };
+    renderLessons();
+    setTimeout(() => { R.wait = false; L.reveal = false; if (R.strikes >= 3) endRush('Three strikes.'); else if (!R.over) nextRushPuzzle(); }, 1100);
+    return;
+  }
+  if (!ok && L.kind === 'rated' && !L.scored) { L.scored = true; L.change = rate(p, 0); }
   if (!ok) {
     L.tries++;
     if (L.tries >= 2) L.hint = true;
@@ -355,8 +452,21 @@ async function tapLesson(nm) {
     }, 600);
     return;
   }
+  if (L.kind === 'rush') {
+    const R = L.rush;
+    R.score++; R.wait = true; L.fb = { ok: true, msg: `${m.san}! Correct.` };
+    renderLessons();
+    setTimeout(() => { R.wait = false; if (!R.over) nextRushPuzzle(); }, 450);
+    return;
+  }
   L.solvedNow = true;
-  L.fb = { ok: true, msg: p.theme === 'mine' && uci !== p.best ? `Good find! ${m.san} works too.` : `Correct! ${m.san}${ch.in_checkmate() ? ' is checkmate' : ''}.` };
+  let extra = '';
+  if (L.kind === 'rated') {
+    if (!L.scored) { L.scored = true; L.change = rate(p, L.hint ? 0 : 1); }
+    extra = ` Rating ${L.change >= 0 ? '+' : ''}${L.change} (now ${pz().rating}).`;
+  }
+  if (L.kind === 'daily' && BC.stats) BC.stats.record(p.id, L.tries === 0 && !L.hint ? 'good' : 'ok');
+  L.fb = { ok: true, msg: (p.theme === 'mine' && uci !== p.best ? `Good find! ${m.san} works too.` : `Correct! ${m.san}${ch.in_checkmate() ? ' is checkmate' : ''}.`) + extra };
   markSolved(p.id);
   renderLessons();
 }
@@ -413,11 +523,25 @@ function endDrill(d, afterMine) {
 function markDrill() { const rec = lessonRec(L.lesson.id); sync.progress.lessons[L.lesson.id] = { solved: rec.solved, done: true }; sync.saveProgress(); }
 
 const LACT = {
-  home: () => { L.lesson = null; L.drill = null; renderLessons(); },
-  nextP: () => { L.pi = Math.min(L.puzzles.length - 1, L.pi + 1); resetPuzzle(); renderLessons(); },
+  home: () => { if (L.rush) { clearInterval(L.rush.timer); L.rush = null; } L.lesson = null; L.drill = null; L.kind = 'lesson'; renderLessons(); },
+  nextP: () => {
+    if (L.kind === 'rated') {
+      const seen = new Set(L.puzzles.map(p => p.id));
+      const p = pickPuzzle(pz().rating, seen);
+      if (p) { L.puzzles = [p]; L.pi = 0; }
+    } else L.pi = Math.min(L.puzzles.length - 1, L.pi + 1);
+    resetPuzzle(); renderLessons();
+  },
   retryP: () => { resetPuzzle(); renderLessons(); },
   hint: () => { L.hint = true; renderLessons(); },
-  reveal: () => { L.reveal = true; L.sel = {}; renderLessons(); },
+  reveal: () => {
+    const p = current();
+    if (L.kind === 'rated' && p && !L.scored) { L.scored = true; L.change = rate(p, 0); L.fb = { ok: false, msg: `Rating ${L.change} (now ${pz().rating}).` }; }
+    if (L.kind === 'daily' && p && BC.stats && !L.solvedNow) BC.stats.record(p.id, 'fail');
+    L.reveal = true; L.sel = {}; renderLessons();
+  },
+  rushAgain: () => openLesson('rush'),
+  rushStop: () => endRush('You ended the run.'),
   restartDrill: () => { L.drill = newDrill(L.lesson.drill); L.drill.started = true; L.sel = {}; renderLessons(); },
 };
 
@@ -427,11 +551,12 @@ BC.on('openCourse', id => {
   const l = c.lines.find(x => !lineRec(x.id).lv) || c.lines[0];
   startLine(c, l, lineRec(l.id).lv ? 'practice' : 'learn', []);
 });
-BC.on('openLesson', id => { if (id === 'mine' && !L.mine) loadMine(); openLesson(id); });
+BC.on('openLesson', id => openLesson(id));
 BC.on('view', name => {
   if (name === 'openings') renderOpenings();
-  if (name === 'lessons') { if (!L.mine) loadMine(); renderLessons(); }
+  if (name === 'lessons') renderLessons();
 });
-BC.on('sync', () => { L.mine = null; if (!$('view-openings').hidden) renderOpenings(); if (!$('view-lessons').hidden) { loadMine(); renderLessons(); } });
+BC.on('sync', () => { if (!$('view-openings').hidden) renderOpenings(); if (!$('view-lessons').hidden) renderLessons(); });
+['stats', 'trainer'].forEach(ev => BC.on(ev, () => { if (!$('view-lessons').hidden && !L.lesson) renderLessons(); }));
 BC.learn = { get openings() { return O; }, get lessons() { return L; } };
 })();

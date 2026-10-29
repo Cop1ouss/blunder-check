@@ -15,8 +15,8 @@ import shutil
 
 WEB = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(os.path.dirname(WEB), "docs")
-FILES = ["data.js", "content.js", "legends.js",
-         "js/shared.js", "js/review.js", "js/learn.js", "js/legends.js",
+FILES = ["data.js", "content.js", "legends.js", "puzzles.js",
+         "js/shared.js", "js/review.js", "js/learn.js", "js/legends.js", "js/mygames.js", "js/insights.js",
          "engine/chess-0.10.3.js", "engine/stockfish-17.1-lite-single-03e3232.js",
          "engine/stockfish-17.1-lite-single-03e3232.wasm", "engine/stockfish-10-asm.js"]
 ICONS = ["icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png",

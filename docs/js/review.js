@@ -532,6 +532,19 @@ document.addEventListener('keydown', e => {
 // ---------- review flow ----------
 const DEPTH = { fast: { depth: 12, movetime: 600 }, std: { depth: 16, movetime: 2000 }, deep: { depth: 20, movetime: 5000 } };
 function showErr(msg) { const e = $('err'); e.textContent = msg; e.hidden = !msg; }
+// Analyse every position of a game. Background runs wait while a review you started is running.
+async function analyseGame(game, cfg, { onStep, cancelled, background } = {}) {
+  await engine.start();
+  const N = game.fens.length;
+  for (let i = 0; i < N; i++) {
+    while (background && BC.fgBusy) await new Promise(r => setTimeout(r, 400));
+    if (cancelled && cancelled()) return false;
+    if (!game.an[i]) game.an[i] = game.info[i].over ? { lines: [], end: true } : { lines: await engine.analyse(game.fens[i], cfg), depth: cfg.depth };
+    if (onStep) onStep(i + 1, N);
+  }
+  derive(game);
+  return true;
+}
 async function review(opts) {
   const me = opts && opts.me;
   showErr('');
@@ -544,22 +557,24 @@ async function review(opts) {
   const prog = $('progress'); prog.hidden = false; $('pbar').style.width = '0%';
   $('ptxt').textContent = 'Starting Stockfish… (the first time takes a few seconds)';
   $('reviewBtn').disabled = true;
+  BC.fgBusy = true;
   try {
-    await engine.start();
-    const N = game.fens.length;
-    for (let i = 0; i < N; i++) {
-      if (my !== runId || g !== game) return;
-      game.an[i] = game.info[i].over ? { lines: [], end: true } : { lines: await engine.analyse(game.fens[i], cfg), depth: cfg.depth };
-      $('pbar').style.width = ((i + 1) / N * 100).toFixed(1) + '%';
-      $('ptxt').textContent = `Analyzing position ${i + 1} of ${N}`;
-      if (g === game) { derive(game); render(); }
-    }
+    const done = await analyseGame(game, cfg, {
+      cancelled: () => my !== runId || g !== game,
+      onStep: (i, N) => {
+        $('pbar').style.width = (i / N * 100).toFixed(1) + '%';
+        $('ptxt').textContent = `Analyzing position ${i} of ${N}`;
+        derive(game); render();
+      },
+    });
+    if (!done) return;
     $('ptxt').textContent = 'Review complete.';
     await saveCurrent();
   } catch (e) {
     showErr('Stockfish could not start in this browser. Try another browser such as Chrome, Edge, Firefox or Safari.');
     prog.hidden = true;
   } finally {
+    BC.fgBusy = false;
     if (my === runId) $('reviewBtn').disabled = false;
   }
 }
@@ -570,7 +585,65 @@ async function saveCurrent() {
   const h = g.headers;
   await BC.sync.saveReview({ pgn: g.pgn, an: g.an, me: g.me, white: h.White || 'White', black: h.Black || 'Black',
     result: h.Result || '', date: h.Date || '', savedAt: Date.now() });
+  if (BC.stats) { const { summary, mistakes } = summarize(g); BC.stats.add(summary, mistakes); }
   renderHistory();
+}
+
+// ---------- game summaries (for Insights and the daily trainer) ----------
+function timeClass(h) {
+  const tc = h.TimeControl || '';
+  if (tc.includes('/')) return 'daily';
+  const [b, inc] = tc.split('+').map(Number);
+  if (!isFinite(b) || !b) return 'unknown';
+  const est = b + 40 * (inc || 0);
+  return est < 180 ? 'bullet' : est < 600 ? 'blitz' : 'rapid';
+}
+function howEnded(h) {
+  const t = (h.Termination || '').toLowerCase();
+  for (const [re, how] of [[/checkmate/, 'checkmate'], [/resign/, 'resignation'], [/abandon/, 'abandoned'], [/stalemate/, 'stalemate'],
+    [/repetition/, 'repetition'], [/agreement/, 'agreement'], [/insufficient/, 'insufficient'], [/50/, 'fifty'], [/time/, 'time']]) if (re.test(t)) return how;
+  return 'other';
+}
+function clocks(pgn) { const out = [], re = /\[%clk\s+(\d+):(\d+):(\d+(?:\.\d+)?)\]/g; let m; while ((m = re.exec(pgn))) out.push(+m[1] * 3600 + +m[2] * 60 + +m[3]); return out; }
+function gameTime(h) {
+  const d = (h.UTCDate || h.Date || '').replace(/\./g, '-'), t = (h.UTCTime || h.EndTime || '12:00:00').slice(0, 8);
+  const ms = Date.parse(`${d}T${t}Z`);
+  return isFinite(ms) ? ms : Date.now();
+}
+const isEndgame = fen => parseFen(fen).filter(p => p && p.t !== 'p' && p.t !== 'k').length <= 6;
+const family = name => (name || '').replace(/^[A-E]\d\d\s+/, '').split(':')[0].trim() || null;
+function summarize(game, meta = {}) {
+  const h = game.headers, c = game.me, R = h.Result;
+  const result = R === '1/2-1/2' ? 'draw' : R === '1-0' || R === '0-1' ? ((R === '1-0') === (c === 'w') ? 'win' : 'loss') : 'unknown';
+  const elo = k => { const v = parseInt(h[k], 10); return isFinite(v) ? v : null; };
+  const clk = clocks(game.pgn), haveClk = clk.length === game.moves.length;
+  const tcRaw = h.TimeControl || '', base = !tcRaw.includes('/') && parseInt(tcRaw, 10) > 0 ? parseInt(tcRaw, 10) : null;
+  const counts = {}, tags = {}, phase = { opening: 0, middle: 0, end: 0 }, mistakes = [];
+  let lowTime = 0, severe = 0, clockedSevere = 0;
+  const id = meta.url || h.Link || 'g' + BC.fnv(game.pgn);
+  game.res.forEach(r => {
+    if (!r) return;
+    const m = game.moves[r.k];
+    if (m.color !== c) return;
+    counts[r.cls] = (counts[r.cls] || 0) + 1;
+    if (!SEVERE.has(r.cls)) return;
+    severe++;
+    const ex = explainBad(game, r.k);
+    tags[ex.tag] = (tags[ex.tag] || 0) + 1;
+    if (haveClk && base) { clockedSevere++; const before = r.k >= 2 ? clk[r.k - 2] : base; if (before < Math.max(30, base * 0.1)) lowTime++; }
+    phase[m.num <= 12 ? 'opening' : isEndgame(game.fens[r.k]) ? 'end' : 'middle']++;
+    const best = game.an[r.k].lines[0];
+    if (best) mistakes.push({ id: 'm' + BC.fnv(game.fens[r.k]), fen: game.fens[r.k], best: best.uci, played: m.uci, playedSan: m.san, cls: r.cls,
+      label: `vs ${c === 'w' ? (h.Black || 'Black') : (h.White || 'White')}, move ${m.num}`, explain: ex.text, last: r.k > 0 ? game.moves[r.k - 1].uci : null,
+      winBest: forC(winOfScore(best), c), gameId: id });
+  });
+  const summary = {
+    id, url: meta.url || h.Link || null, date: meta.date || gameTime(h), tc: meta.tc || timeClass(h), color: c, result, how: howEnded(h),
+    opp: c === 'w' ? (h.Black || 'Black') : (h.White || 'White'), myRating: elo(c === 'w' ? 'WhiteElo' : 'BlackElo'), oppRating: elo(c === 'w' ? 'BlackElo' : 'WhiteElo'),
+    opening: family(game.opening), acc: game.acc && game.acc[c] != null ? Math.round(game.acc[c] * 10) / 10 : null,
+    moves: Math.ceil(game.moves.length / 2), counts, tags, severe, lowTime, clockedSevere, phase,
+  };
+  return { summary, mistakes };
 }
 async function renderHistory() {
   const list = await BC.sync.listReviews();
@@ -635,7 +708,18 @@ function renderLegendMatch() {
 
 // Your mistakes from saved reviews, for the Lessons tab.
 BC.review = {
+  parseGame, derive, analyseGame, summarize, family, DEPTH, TAG_LABEL, TAG_LESSON,
   reviewPgn(pgn, me) { $('pgn').value = pgn; window.scrollTo({ top: 0, behavior: 'smooth' }); return review({ me }); },
+  // Open a game that was already reviewed (instant), or review it now.
+  async openOrReview(pgn, me) {
+    const parsed = parseGame(pgn);
+    if (!parsed) return this.reviewPgn(pgn, me);
+    const x = (await BC.sync.listReviews()).find(r => r.pgn === parsed.pgn && r.an && r.an.length === parsed.fens.length);
+    if (!x) return this.reviewPgn(pgn, me);
+    runId++; $('progress').hidden = true; $('reviewBtn').disabled = false; showErr('');
+    parsed.an = x.an; parsed.me = me || x.me; g = parsed; isSample = false; practice = null; ply = 0; flipped = g.me === 'b';
+    derive(g); render(); $('pgn').value = parsed.pgn; window.scrollTo({ top: 0, behavior: 'smooth' });
+  },
   async myMistakes() {
     const out = [];
     for (const x of await BC.sync.listReviews()) {

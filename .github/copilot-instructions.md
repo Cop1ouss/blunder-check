@@ -5,8 +5,8 @@ Read `PRD.md` first. It describes the app, its rules and the checks every change
 ## Repository layout
 
 - `docs/`: the published app (GitHub Pages serves this folder). **Generated** by `web/tools/build_app.py`. Never edit it by hand; edit `web/` and rebuild.
-- `web/`: app source. `review.html` (markup and CSS), `js/shared.js`, `js/review.js`, `js/learn.js`, `js/legends.js`, `app/app.js` (installed-app extras).
-- `web/data.js`, `web/content.js`, `web/legends.js`: generated content. Rebuild with the scripts in `web/tools/`; never hand-edit.
+- `web/`: app source. `review.html` (markup and CSS), `js/shared.js`, `js/review.js`, `js/learn.js`, `js/legends.js`, `js/mygames.js` (chess.com import, auto-review, stats), `js/insights.js`, `app/app.js` (installed-app extras).
+- `web/data.js`, `web/content.js`, `web/legends.js`, `web/puzzles.js`: generated content. Rebuild with the scripts in `web/tools/`; never hand-edit.
 - `web/engine/`: Stockfish and chess.js builds. **Do not modify** (GPLv3 binaries).
 - `review.py`, `drill.py`: optional command-line tools (Python, python-chess, local Stockfish).
 
@@ -17,6 +17,8 @@ Read `PRD.md` first. It describes the app, its rules and the checks every change
 - Match the existing code style: small functions, `const` and arrow functions, the `BC` namespace for shared helpers, comments only where the reason isn't obvious.
 - Colors come from the CSS variables on `:root`, with dark-mode values in both dark blocks. Keep the layout working at 390px wide.
 - Wrap every `localStorage` access in try/catch (use `BC.local`).
+- chess.com data comes only from the public API's monthly archives (finished games). Never fetch or show games in progress.
+- Charts: one series per chart, thin marks, a legend when there are two or more series, text in text colors (never the series color), and a table or text alternative. Win/draw/loss uses the `--win`, `--draw`, `--loss` tokens (colorblind-safe).
 - Write user-facing text plainly, for a beginner.
 - Chess content changes (opening lines, puzzles, famous games) go through `web/tools/content_src.py` or `web/tools/legends_src.py` and must be rebuilt with `build_content.py` or `build_legends.py`, which check them with Stockfish. Don't publish a build that prints `PROBLEM:`.
 

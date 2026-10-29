@@ -72,7 +72,16 @@ Nine players: Morphy, Anderssen, Capablanca, Tal, Fischer, Karpov, Kasparov, Pol
 - **Guess the Move** through 8 famous games (Opera Game, Immortal, Evergreen, Game of the Century, Fischer–Spassky game 6, Kasparov's Immortal, Tal–Smyslov 1959, Carlsen–Ernst 2004): 10 points for the master's move, 5 for a move Stockfish rates as just as good, with notes at key moments.
 - The UI must say the bots imitate openings and tendencies and are not the real players.
 
-### 5.5 App shell
+### 5.5 chess.com games, Insights and training
+
+- **Your chess.com games** (Review tab): enter a chess.com username once; the app loads that player's **finished** games from chess.com's free public API (monthly archives only, which contain finished games). Tap a game to review it. Only standard chess is loaded. Fair-play note stays on the card.
+- **Auto-review**: reviews the last 10 unreviewed games in the background at Fast depth, pausing while a review you started is running. Each review (automatic or manual) stores a compact game summary and adds your mistakes to Daily training.
+- **Insights** tab: filter by time control; rating with a goal (default 400) and progress meter; rating chart with the goal line and a crosshair tooltip; results as White and Black (win/draw/loss bar in colorblind-safe blue/gray/orange); your openings with score and accuracy; from reviewed games: average accuracy, blunders and mistakes per game, accuracy chart, biggest leaks with links to lessons, when mistakes happen (opening, middlegame, endgame, low on time); how games end, with tips.
+- **Daily training** (Lessons): your own mistakes with spaced repetition (1, 2, 4, 8, 16, 32 days); first-try solves move a position up a level, misses bring it back tomorrow; a daily streak.
+- **Rated puzzles**: 364 engine-checked puzzles with estimated ratings (about 580 to 1530); an Elo-style puzzle rating.
+- **Puzzle Rush**: 3 minutes, 3 strikes, puzzles get harder as you solve; best score saved.
+
+### 5.6 App shell
 
 - Installable: web app manifest, icons (white knight on blue), service worker that caches every file (about 9 MB, mostly the engine) so the app works offline.
 - When a new version is published, an **Update** bar appears; tapping it switches to the new version.
@@ -85,7 +94,8 @@ Nine players: Morphy, Anderssen, Capablanca, Tal, Fischer, Karpov, Kasparov, Pol
 - `web/review.html`: markup and CSS for all four tabs. `web/js/shared.js` (board, engine wrapper, storage), `review.js`, `learn.js`, `legends.js`; `web/app/app.js` (installed-app extras).
 - Data files (generated, do not hand-edit): `data.js` (opening book, piece images, sample game), `content.js` (courses, lessons, puzzles), `legends.js` (legends, their courses and famous games).
 - Engine: `engine/stockfish-17.1-lite-single-*.js/.wasm` (single-threaded WebAssembly, runs without special server headers), fallback `engine/stockfish-10-asm.js` (pure JavaScript). Both run in a Web Worker and speak UCI. chess.js 0.10.3 handles rules and PGN.
-- Storage: `localStorage` keys `bc.progress`, `bc.history`, `bc.username`, `bc.botLevel`. The same code also runs as a claude.ai artifact, where it syncs to the owner's account; in the installed app it stays local.
+- Storage: `localStorage` keys `bc.progress` (openings, lessons, legends, puzzle rating), `bc.history` (full reviews), `bc.username`, `bc.botLevel`, `bc.ccgames` (loaded chess.com games), `bc.summaries` (per-game summaries for Insights), `bc.trainer` (Daily training positions and days trained), `bc.goal`, `bc.insTc`, `bc.ccOpenings` (opening-name cache).
+- `js/mygames.js`: chess.com import, auto-review queue, summaries and trainer storage (`BC.stats`). `js/insights.js`: the Insights tab. `puzzles.js`: the rated puzzle set. The same code also runs as a claude.ai artifact, where it syncs to the owner's account; in the installed app it stays local.
 
 ## 7. Content quality checks
 
@@ -94,6 +104,7 @@ Content is built by Python scripts in `web/tools/` with python-chess and a local
 - `build_content.py`: opening lines must be legal; your side's moves may not lose more than 0.7 pawns against Stockfish (depth 16). Hand-written puzzles must have their answer among the moves Stockfish accepts. Tactics puzzles come from engine-played games and are kept only when Stockfish confirms the theme and a clear answer.
 - `build_legends.py`: famous games must be legal; games ending in mate must end in checkmate, others must leave the winner clearly ahead; records alternative moves for Guess the Move.
 - `build_data.py`: opening book (lichess chess-openings, CC0), piece images, sample game.
+- `build_puzzles.py`: the rated puzzle set (same engine checks as the lesson puzzles, run in parallel), with ratings estimated from theme and difficulty.
 
 A build that prints `PROBLEM:` lines must not be published.
 
@@ -114,7 +125,7 @@ A build that prints `PROBLEM:` lines must not be published.
 - Anything usable during a live game on another site.
 - Accounts, servers, sync between devices, paid services.
 - App Store distribution (needs a $99/year Apple developer account and a Mac).
-- Fetching games from chess.com automatically (the player pastes the PGN).
+- Anything from chess.com other than the player's finished games and public ratings. No logins, no scraping, nothing from games in progress.
 
 ## 10. Licenses
 
