@@ -1,4 +1,24 @@
-# Chess Coach: free game review with Stockfish
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/readme/banner-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset=".github/readme/banner-light.svg">
+  <img alt="blunder-check" src=".github/readme/banner-dark.svg" width="100%">
+</picture>
+
+<p align="center">
+  <a href="https://cop1ouss.github.io/blunder-check/"><img alt="Open the app →" src="https://img.shields.io/badge/Open%20the%20app%20%E2%86%92-cba6f7?style=for-the-badge&labelColor=1e1e2e"></a>
+</p>
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-1e1e2e?style=flat-square&logo=python&logoColor=89b4fa">
+  <img alt="Stockfish" src="https://img.shields.io/badge/Stockfish-1e1e2e?style=flat-square&logo=lichess&logoColor=cdd6f4">
+  <img alt="PWA" src="https://img.shields.io/badge/PWA-1e1e2e?style=flat-square&logo=pwa&logoColor=cba6f7">
+  <img alt="GPL-3.0" src="https://img.shields.io/badge/GPL--3.0-1e1e2e?style=flat-square&logo=gnu&logoColor=a6e3a1">
+</p>
+
+<p align="center">
+  <img alt="Desktop view" src=".github/readme/screenshot-desktop.png" width="74%">
+  &nbsp;
+  <img alt="Phone view" src=".github/readme/screenshot-phone.png" width="21%">
+</p>
 
 This is a free alternative to paid "Game Review". It uses Stockfish, the free,
 open-source engine from github.com/official-stockfish/stockfish, to review your
@@ -152,3 +172,7 @@ follows it.
   The default 14 is plenty at this level.
 - The lichess.org analysis board is also free if you want to explore a
   position move by move.
+
+---
+
+<p align="center"><sub>Part of <a href="https://github.com/Cop1ouss">Uncook</a> · built off systems · © 2026 Dajoni Gomez</sub></p>
