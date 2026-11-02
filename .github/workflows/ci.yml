@@ -1,0 +1,45 @@
+# Runs on every push and pull request. A red X here blocks the merge.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/data/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    name: Links, JSON and JavaScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check every local link, JSON file and script
+        run: python3 .github/scripts/check_site.py
+
+  python:
+    name: Python tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install chess
+      - name: Compile review, drill and the web build tools
+        run: python -m compileall -q review.py drill.py web/tools
+      - name: Smoke test
+        run: |
+          python review.py --help
+          python drill.py --help

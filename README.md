@@ -7,6 +7,9 @@
   <a href="https://cop1ouss.github.io/blunder-check/"><img alt="Open the app" src="https://img.shields.io/badge/%E2%96%B6%20open%20the%20app-live%20on%20GitHub%20Pages-cba6f7?style=for-the-badge&labelColor=1e1e2e"></a>
 </p>
 <p align="center">
+  <a href="https://github.com/Cop1ouss/blunder-check/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Cop1ouss/blunder-check/ci.yml?style=flat-square&label=CI&labelColor=1e1e2e&color=a6e3a1"></a>
+  <a href="https://github.com/Cop1ouss/blunder-check/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://img.shields.io/github/actions/workflow/status/Cop1ouss/blunder-check/codeql.yml?style=flat-square&label=CodeQL&labelColor=1e1e2e&color=89b4fa"></a>
+  <a href="SECURITY.md"><img alt="Security policy" src="https://img.shields.io/badge/security-policy-f38ba8?style=flat-square&labelColor=1e1e2e"></a>
   <img alt="engine: Stockfish" src="https://img.shields.io/badge/engine-Stockfish-cba6f7?style=flat-square&labelColor=1e1e2e">
   <img alt="python: review.py · drill.py" src="https://img.shields.io/badge/python-review.py%20%C2%B7%20drill.py-89b4fa?style=flat-square&labelColor=1e1e2e">
   <img alt="phone: installable PWA" src="https://img.shields.io/badge/phone-installable%20PWA-a6e3a1?style=flat-square&labelColor=1e1e2e">
@@ -170,6 +173,16 @@ follows it.
   The default 14 is plenty at this level.
 - The lichess.org analysis board is also free if you want to explore a
   position move by move.
+
+
+## Project docs
+
+| | |
+| --- | --- |
+| 📋 [PRD](PRD.md) | The problem, the goal, scope and the finish line |
+| 🛡️ [Security policy](SECURITY.md) | How to report a vulnerability privately |
+| ⚖️ [License](LICENSE) | GPL-3.0 |
+| 🧪 [CI](.github/workflows/ci.yml) | What runs on every pull request |
 
 ---
 
