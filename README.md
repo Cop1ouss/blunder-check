@@ -1,4 +1,22 @@
-# Chess Coach: free game review with Stockfish
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+  <img alt="blunder-check banner" src="assets/banner-light.svg" width="100%">
+</picture>
+
+<p align="center">
+  <a href="https://cop1ouss.github.io/blunder-check/"><img alt="Open the app" src="https://img.shields.io/badge/%E2%96%B6%20open%20the%20app-live%20on%20GitHub%20Pages-cba6f7?style=for-the-badge&labelColor=1e1e2e"></a>
+</p>
+<p align="center">
+  <img alt="engine: Stockfish" src="https://img.shields.io/badge/engine-Stockfish-cba6f7?style=flat-square&labelColor=1e1e2e">
+  <img alt="python: review.py · drill.py" src="https://img.shields.io/badge/python-review.py%20%C2%B7%20drill.py-89b4fa?style=flat-square&labelColor=1e1e2e">
+  <img alt="phone: installable PWA" src="https://img.shields.io/badge/phone-installable%20PWA-a6e3a1?style=flat-square&labelColor=1e1e2e">
+  <img alt="license: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-a6adc8?style=flat-square&labelColor=1e1e2e">
+</p>
+
+<p align="center">
+  <a href="https://cop1ouss.github.io/blunder-check/"><img alt="blunder-check on desktop" src="assets/screenshot-desktop.png" width="72%"></a>
+  <a href="https://cop1ouss.github.io/blunder-check/"><img alt="blunder-check on a phone" src="assets/screenshot-phone.png" width="22%"></a>
+</p>
 
 This is a free alternative to paid "Game Review". It uses Stockfish, the free,
 open-source engine from github.com/official-stockfish/stockfish, to review your
@@ -12,7 +30,7 @@ Getting engine help during a game is cheating and gets accounts banned.
 ## The phone app
 
 `docs/` is Blunder Check packaged as an installable app (a Progressive Web
-App). GitHub Pages serves it from this folder. Once it's online:
+App), live at https://cop1ouss.github.io/blunder-check/. To install it:
 
 - **iPhone:** open the app's link in **Safari**, tap **Share**, then **Add to Home Screen**.
 - **Android:** open the link in **Chrome** and tap **Install app** (or ⋮ → **Install app**).
@@ -152,3 +170,7 @@ follows it.
   The default 14 is plenty at this level.
 - The lichess.org analysis board is also free if you want to explore a
   position move by move.
+
+---
+
+<p align="center"><sub>Built by <a href="https://github.com/Cop1ouss">Dajoni Gomez</a> · part of the <a href="https://cop1ouss.github.io/Cop1ouss/">Uncook</a> journey log</sub></p>
