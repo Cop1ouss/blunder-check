@@ -9,7 +9,7 @@ from the same site, so it needs no engine work and no access to chess.com.
   python3 web/tools/sync_chesscom.py analyse --user Cop1ouss --out docs/data --max 20
 
 fetch    Standard library only. Downloads the monthly archives (which contain
-         finished games only) and current ratings, merges them into
+         finished games only; all of them the first time, then the last two) and current ratings, merges them into
          games.json, and reports whether any game still needs a review
          (also as need_analysis=true|false in $GITHUB_OUTPUT).
 analyse  Needs python-chess and Stockfish. Reviews up to --max games without a
@@ -31,7 +31,7 @@ import urllib.request
 
 API = "https://api.chess.com/pub/player/"
 UA = "BlunderCheck/1.0 (personal chess training app; https://github.com/Cop1ouss/blunder-check)"
-MAX_GAMES = 400
+MAX_GAMES = 1000
 DRAW_CODES = {"agreed", "repetition", "stalemate", "insufficient", "50move", "timevsinsufficient"}
 
 
@@ -135,6 +135,9 @@ def fetch(args):
     user = args.user.lower()
     folder, games_path, _ = paths(args.out, user)
     os.makedirs(folder, exist_ok=True)
+    index = os.path.join(args.out, "index.json")  # lets the app pick this account without typing it
+    if not os.path.exists(index) or json.load(open(index)).get("users") != [user]:
+        save(index, {"users": [user]})
     try:
         fetch_games(args, user, folder, games_path)
         write_status(folder, {"ok": True, "error": None})
@@ -150,7 +153,9 @@ def fetch_games(args, user, folder, games_path):
     before = json.dumps({k: data.get(k) for k in ("games", "stats")}, sort_keys=True, default=str)
     src = Source(args.fixture)
     archives = src.get(f"{API}{user}/games/archives").get("archives", [])
-    months = archives[-2:] if data["games"] else archives[-args.months:]
+    was_full = data.get("full")
+    months = archives[-2:] if was_full else archives  # first run (or older data): your whole history
+    data["full"] = True
     known = {g["url"]: g for g in data["games"]}
     added = 0
     for url in months:
@@ -185,7 +190,7 @@ def fetch_games(args, user, folder, games_path):
     old = json.loads(before)
     changed = (json.dumps(data["games"], sort_keys=True) != json.dumps(old["games"], sort_keys=True)
                or stats_cmp(data["stats"]) != stats_cmp(old["stats"]) or not os.path.exists(games_path)
-               or len(data["ratingLog"]) != len(load(games_path, user)["ratingLog"]))
+               or len(data["ratingLog"]) != len(load(games_path, user)["ratingLog"]) or not was_full)
     if changed:  # only commit when something really changed
         data["updatedAt"] = now
         save(games_path, data)
@@ -253,7 +258,6 @@ if __name__ == "__main__":
     ap.add_argument("--user", required=True)
     ap.add_argument("--out", default="docs/data")
     ap.add_argument("--fixture")
-    ap.add_argument("--months", type=int, default=12, help="months to load on the first run")
     ap.add_argument("--max", type=int, default=20, help="games to review per run")
     ap.add_argument("--depth", type=int, default=14)
     ap.add_argument("--movetime", type=float, default=1.0, help="seconds per position at most")

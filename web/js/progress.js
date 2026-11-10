@@ -103,6 +103,12 @@ const ACH = [
   { id: 'tactician', group: 'Lessons', title: 'Tactician', desc: 'Finish the Free pieces and Forks lessons.', check: () => (lessonDone('free-pieces') && lessonDone('forks') ? Date.now() : null) },
   { id: 'mates', group: 'Lessons', title: 'Mate master', desc: 'Finish the three checkmate lessons.', check: () => (['mate-1', 'back-rank', 'mate-2'].every(lessonDone) ? Date.now() : null) },
   { id: 'finisher', group: 'Lessons', title: 'Finisher', desc: 'Pass all three endgame checkmate drills.', check: () => (['ladder', 'kq-k', 'kr-k'].every(lessonDone) ? Date.now() : null) },
+  { id: 'drill1', group: 'Drills', title: 'Endgame student', desc: 'Pass any endgame drill in Analyze.', check: c => Object.values(c.drills).sort((a, b) => a - b)[0] || null },
+  { id: 'rookPro', group: 'Drills', title: 'Rook endgame pro', desc: 'Pass the Lucena and Philidor drills.', check: c => (c.drills.lucena && c.drills.philidor ? Math.max(c.drills.lucena, c.drills.philidor) : null) },
+  { id: 'drillsAll', group: 'Drills', title: 'Endgame master', desc: 'Pass all six endgame drills.', check: c => (Object.keys(c.drills).length >= 6 ? Math.max(...Object.values(c.drills)) : null) },
+  { id: 'vision10', group: 'Vision', title: 'Sharp eyes', desc: 'Name 10 squares in 30 seconds.', check: c => (Math.max(c.vision.w, c.vision.b) >= 10 ? Date.now() : null) },
+  { id: 'vision20', group: 'Vision', title: 'Eagle eye', desc: 'Name 20 squares in 30 seconds.', check: c => (Math.max(c.vision.w, c.vision.b) >= 20 ? Date.now() : null) },
+  { id: 'visionBoth', group: 'Vision', title: 'Both sides', desc: 'Name 15 squares from White\'s side and from Black\'s side.', check: c => (Math.min(c.vision.w, c.vision.b) >= 15 ? Date.now() : null) },
   { id: 'legend', group: 'Legends', title: 'Legend slayer', desc: 'Beat any legend bot.', check: c => (Object.values(c.leg.results || {}).some(r => r.w > 0) ? Date.now() : null) },
   { id: 'guess70', group: 'Legends', title: 'Think like a master', desc: 'Score 70%+ in a Guess the Move game.', check: c => (Object.values(c.leg.guess || {}).some(v => v >= 70) ? Date.now() : null) },
 ];
@@ -114,7 +120,8 @@ function context() {
   return { data, games: data.filter(r => r.result !== 'unknown'), sums, ladder: ladder(tc, series), series,
     streak: activity.streak().days, trainedTotal: Object.values(tr.days).reduce((s, v) => s + v, 0),
     pz: BC.sync.progress.puzzles || { rating: 800 }, leg: BC.sync.progress.legends || {},
-    lines: ops.filter(o => o.lv > 0).length, mastered: ops.filter(o => o.lv >= 4).length };
+    lines: ops.filter(o => o.lv > 0).length, mastered: ops.filter(o => o.lv >= 4).length,
+    drills: BC.local.get('bc.drills', {}), vision: { w: 0, b: 0, ...BC.local.get('bc.vision', {}) } };
 }
 const earned = () => BC.local.get('bc.achievements', {});
 function evaluate() {

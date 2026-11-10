@@ -174,7 +174,7 @@ function visionTick() {
   if (A.mode !== 'vision' || !V.end) return;
   if (Date.now() >= V.end) {
     const best = BC.local.get('bc.vision', { w: 0, b: 0 });
-    if (V.score > best[V.side]) { best[V.side] = V.score; BC.local.set('bc.vision', best); }
+    if (V.score > (best[V.side] || 0)) { best[V.side] = V.score; BC.local.set('bc.vision', best); BC.emit('progress'); }
     BC.activity && BC.activity.bump && BC.activity.bump('vision');
     return renderVision();
   }

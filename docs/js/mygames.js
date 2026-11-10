@@ -275,10 +275,7 @@ function renderCC() {
       e.preventDefault();
       const user = $('ccUser').value.trim().toLowerCase();
       if (!user) return;
-      const srv = await loadServer(user);
-      await loadGames({ user, silent: !!srv });
-      const now = ccStore();
-      if (now.user && (!CC.error || srv)) { CC.error = ''; autoSync({ force: true }); }
+      useAccount(user);
     });
     return;
   }
@@ -380,6 +377,17 @@ async function autoSync({ force = false } = {}) {
     renderCC();
     if (BC.local.get('bc.autoReviewNew', true) !== false) autoReview(5, { quiet: true });
   } finally { syncing = false; }
+}
+async function useAccount(user) {
+  const srv = await loadServer(user);
+  await loadGames({ user, silent: !!srv });
+  const now = ccStore();
+  if (now.user && (!CC.error || srv)) { CC.error = ''; autoSync({ force: true }); }
+}
+// A fresh install picks the account the GitHub robot syncs, so nothing needs typing.
+if (!ccStore().user) {
+  fetch('data/index.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null))
+    .then(x => { const u = x && x.users && x.users[0]; if (u && !ccStore().user) useAccount(u); }).catch(() => {});
 }
 BC.cc.sync = autoSync;
 BC.cc.syncStats = syncStats;
