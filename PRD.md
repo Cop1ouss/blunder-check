@@ -72,6 +72,12 @@ Nine players: Morphy, Anderssen, Capablanca, Tal, Fischer, Karpov, Kasparov, Pol
 - **Guess the Move** through 8 famous games (Opera Game, Immortal, Evergreen, Game of the Century, Fischer–Spassky game 6, Kasparov's Immortal, Tal–Smyslov 1959, Carlsen–Ernst 2004): 10 points for the master's move, 5 for a move Stockfish rates as just as good, with notes at key moments.
 - The UI must say the bots imitate openings and tendencies and are not the real players.
 
+### 5.4b Analyze (tab "Analyze")
+- Analysis board: move for both sides, Stockfish on/off with the top 3 lines and an arrow for the best move, step back/forward, flip, load a FEN or PGN, and let Stockfish play either side from any position. "Analyze from here" in Review opens the game up to the current move.
+- Your games from here: an opening explorer built from the player's loaded chess.com games (first 15 moves), showing each move played with win/draw/loss percentages from the player's side.
+- Endgame drills: six positions played out against full-strength Stockfish (queen mate, rook mate, promote, stop the pawn, Lucena, Philidor). Every position's result was checked with Stockfish at depth 26 or more. Passed drills are stored.
+- Vision trainer: tap the named square, 30 seconds, best score per side.
+
 ### 5.5 chess.com games, Insights and training
 
 - **Your chess.com games** (Review tab): enter a chess.com username once; the app loads that player's **finished** games from chess.com's free public API (monthly archives only, which contain finished games). Tap a game to review it. Only standard chess is loaded. Fair-play note stays on the card.
@@ -106,7 +112,7 @@ Nine players: Morphy, Anderssen, Capablanca, Tal, Fischer, Karpov, Kasparov, Pol
 - `web/review.html`: markup and CSS for all four tabs. `web/js/shared.js` (board, engine wrapper, storage), `review.js`, `learn.js`, `legends.js`; `web/app/app.js` (installed-app extras).
 - Data files (generated, do not hand-edit): `data.js` (opening book, piece images, sample game), `content.js` (courses, lessons, puzzles), `legends.js` (legends, their courses and famous games).
 - Engine: `engine/stockfish-17.1-lite-single-*.js/.wasm` (single-threaded WebAssembly, runs without special server headers), fallback `engine/stockfish-10-asm.js` (pure JavaScript). Both run in a Web Worker and speak UCI. chess.js 0.10.3 handles rules and PGN.
-- Storage: `localStorage` keys `bc.progress` (openings, lessons, legends, puzzle rating), `bc.history` (full reviews), `bc.username`, `bc.botLevel`, `bc.ccgames` (loaded chess.com games), `bc.summaries` (per-game summaries for Insights), `bc.trainer` (Daily training positions and days trained), `bc.goal`, `bc.insTc`, `bc.ccOpenings` (opening-name cache), `bc.ccstats` (latest chess.com ratings), `bc.ratingLog`, `bc.mainTc`, `bc.autoSync`, `bc.activity` (training per day), `bc.achievements`.
+- Storage: `localStorage` keys `bc.progress` (openings, lessons, legends, puzzle rating), `bc.history` (full reviews), `bc.username`, `bc.botLevel`, `bc.ccgames` (loaded chess.com games), `bc.summaries` (per-game summaries for Insights), `bc.trainer` (Daily training positions and days trained), `bc.goal`, `bc.insTc`, `bc.ccOpenings` (opening-name cache), `bc.ccstats` (latest chess.com ratings), `bc.ratingLog`, `bc.mainTc`, `bc.autoSync`, `bc.activity` (training per day), `bc.achievements`, `bc.anEngine`, `bc.drills` (passed drills), `bc.vision` (best scores).
 - `js/progress.js`: plan, milestones, achievements, weekly report and the activity log (`BC.activity`).
 - `js/mygames.js`: chess.com import, auto-review queue, summaries and trainer storage (`BC.stats`). `js/insights.js`: the Insights tab. `puzzles.js`: the rated puzzle set. The same code also runs as a claude.ai artifact, where it syncs to the owner's account; in the installed app it stays local.
 

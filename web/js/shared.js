@@ -303,7 +303,7 @@ function merge(remote, local) {
 }
 
 // ---------- views ----------
-const VIEWS = ['review', 'openings', 'lessons', 'legends', 'insights'];
+const VIEWS = ['review', 'openings', 'lessons', 'legends', 'analyze', 'insights'];
 BC.showView = name => {
   if (!VIEWS.includes(name)) name = 'review';
   VIEWS.forEach(v => { BC.$('view-' + v).hidden = v !== name; });

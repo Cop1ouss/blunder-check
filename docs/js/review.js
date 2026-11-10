@@ -406,7 +406,8 @@ function renderCoach() {
     ${good ? whatHTML : ''}<p class="body">${body}</p>${line}
     <div class="acts">${canRetry ? '<button class="btn" data-act="retry">Retry this move</button>' : ''}
     ${SEV[r.cls] >= 1 && r.cls !== 'book' ? `<button class="btn ghost" data-act="toggleBest">${showBest ? 'Hide' : 'Show'} best move</button>` : ''}
-    ${nextMistake(ply) != null ? '<button class="btn ghost" data-act="nextMistake">Next mistake →</button>' : ''}</div>`;
+    ${nextMistake(ply) != null ? '<button class="btn ghost" data-act="nextMistake">Next mistake →</button>' : ''}
+    <button class="btn ghost" data-act="analyze">Analyze from here</button></div>`;
   bindActs(el);
 }
 function practiceHTML() {
@@ -429,6 +430,7 @@ const ACT = {
   next: () => go(1),
   nextMistake: () => { const k = nextMistake(ply); if (k != null) go(k + 1); },
   toggleBest: () => { showBest = !showBest; render(); },
+  analyze: () => BC.analyze.open(g.fens[0], { moves: g.moves.slice(0, ply).map(m => m.san), flipped }),
   retry: () => startPractice(ply - 1),
   retryNext: () => { const k = nextMistake(practice.k + 1); if (k != null) startPractice(k); },
   reveal: () => { practice.reveal = true; practice.selected = null; practice.targets = null; render(); },

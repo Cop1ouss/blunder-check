@@ -52,6 +52,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .layout { display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
   .side { display: contents; }
   .boardcol { position: static; order: 2; width: 100%; max-width: 600px; margin: 0 auto; }
+  #aPanel { order: 3; }
   #ccCard, #inputCard { order: 1; } #coach { order: 3; } #summary { order: 4; } #movesCard { order: 5; } #historyCard { order: 6; }
 }
 
@@ -165,6 +166,13 @@ footer a { color: inherit; }
 .tabs a:hover { color: var(--ink); }
 .tabs a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
 @media (max-width: 560px) { .tabs { width: 100%; } .tabs a { flex: 1; text-align: center; padding-inline: 2px; font-size: 13px; } }
+@media (max-width: 400px) { .tabs a { font-size: 12px; letter-spacing: -0.01em; } }
+.anlines li { font: 14px/1.4 var(--font-mono, monospace); } .evalv { display: inline-block; min-width: 4.2em; }
+.mv.cur { background: var(--accent); color: var(--accent-ink); border-radius: 4px; padding: 0 3px; }
+.acts.nav .btn { min-width: 44px; }
+.extab { width: 100%; border-collapse: collapse; font-size: 14px; } .extab th, .extab td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.visq { font: 700 48px/1 var(--font-body); text-align: center; margin: 8px 0; }
+#anText { width: 100%; box-sizing: border-box; font: 13px var(--font-mono, monospace); }
 a.btn { text-decoration: none; display: inline-block; }
 .muted { color: var(--muted); }
 .what { margin: 10px 0 0; padding-left: 20px; } .what li { margin: 2px 0; }
@@ -343,6 +351,7 @@ table.week td { padding: 6px 8px 6px 0; font-size: 14px; }
     <a href="#openings" data-view="openings">Openings</a>
     <a href="#lessons" data-view="lessons">Lessons</a>
     <a href="#legends" data-view="legends">Legends</a>
+    <a href="#analyze" data-view="analyze">Analyze</a>
     <a href="#insights" data-view="insights">Progress</a>
   </nav>
 </header>
@@ -439,6 +448,16 @@ table.week td { padding: 6px 8px 6px 0; font-size: 14px; }
 </main>
 </div>
 
+<div id="view-analyze" hidden>
+<main class="layout">
+  <section class="boardcol plain" aria-label="Board">
+    <p class="caption" id="aCaption"></p>
+    <div class="boardwrap"><div class="boardbox"><div class="board"></div><svg class="arrows" viewBox="0 0 8 8" aria-hidden="true"></svg></div></div>
+  </section>
+  <aside class="side"><section class="card" id="aPanel" aria-live="polite"></section></aside>
+</main>
+</div>
+
 <div id="view-insights" hidden>
 <main id="insPanel" aria-live="polite"></main>
 </div>
@@ -459,6 +478,7 @@ table.week td { padding: 6px 8px 6px 0; font-size: 14px; }
 <script src="js/learn.js"></script>
 <script src="js/legends.js"></script>
 <script src="js/mygames.js"></script>
+<script src="js/analyze.js"></script>
 <script src="js/progress.js"></script>
 <script src="js/insights.js"></script>
 <script>
